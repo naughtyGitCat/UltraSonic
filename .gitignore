@@ -1,0 +1,7 @@
+obj/
+bin/
+logs/
+.vs/
+.claudiaideconfig
+.vscode/
+.idea/
