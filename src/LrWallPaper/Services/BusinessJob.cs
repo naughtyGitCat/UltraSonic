@@ -42,9 +42,6 @@ public class BusinessJob : BackgroundService
         (FileExtension = 'jpg' OR FileExtension = 'JPG')
         ";
         _logger.LogDebug(sql);
-        _logger.LogDebug("x");
-        //_logger.LogDebug(db.Connection.ServerVersion.ToString());
-        _logger.LogDebug(db.Fetch<string>("SELECT name FROM sqlite_master WHERE type='table'").Count().ToString());
         return await db.FetchAsync<HistoryCapture>(sql);
     }
     
