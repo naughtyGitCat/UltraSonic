@@ -52,6 +52,7 @@ public class LightroomDatabaseService : ISQLiteFactory
         _tempDBPath = NewTempDBPath();
         File.Copy(_dbPath, _tempDBPath);
         _copyTime = DateTime.Now;
+        _tempPaths = _tempPaths.Append(_tempDBPath);
     }
 
     private void RemoveDBCopy()
