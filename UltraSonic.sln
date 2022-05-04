@@ -5,6 +5,8 @@ VisualStudioVersion = 17.1.32328.378
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LrWallPaper", "src\LrWallPaper\LrWallPaper.csproj", "{F25E5A6B-6D59-4917-ABC4-D8F7EA84FEED}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LrWallPaper.Tests", "test\LrWallPaper.Tests\LrWallPaper.Tests.csproj", "{31A3BA31-C5D4-4D2F-B0B9-30508A0E0F81}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{F25E5A6B-6D59-4917-ABC4-D8F7EA84FEED}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F25E5A6B-6D59-4917-ABC4-D8F7EA84FEED}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F25E5A6B-6D59-4917-ABC4-D8F7EA84FEED}.Release|Any CPU.Build.0 = Release|Any CPU
+		{31A3BA31-C5D4-4D2F-B0B9-30508A0E0F81}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{31A3BA31-C5D4-4D2F-B0B9-30508A0E0F81}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{31A3BA31-C5D4-4D2F-B0B9-30508A0E0F81}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{31A3BA31-C5D4-4D2F-B0B9-30508A0E0F81}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

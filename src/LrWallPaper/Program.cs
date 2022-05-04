@@ -10,17 +10,21 @@ class Program
 {
     static void Main(string[] args)
     {
+        const string logTemplate = "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz}[{level:u3}][{SourceContext}]{message:lj}";
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Debug()
             .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
             .Enrich.FromLogContext()
-            .WriteTo.Console()
+            .WriteTo.Console(outputTemplate: logTemplate)
             .CreateLogger();
         var builder = WebApplication.CreateBuilder(args);
         
         // Add services to the container.
         builder.Services.AddSingleton<ISQLiteFactory, SQLiteFactory>();
-        builder.Services.AddHostedService<BusinessJob>();
+        // builder.Services.AddHostedService<BusinessJob>();
+        builder.Services.AddSingleton<ICaptureRepository, CaptureRawRepository>();
+
+        builder.Services.AddHostedService<ExperimentJob>();
         builder.Services.AddControllers();
         // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
         builder.Services.AddEndpointsApiExplorer();

@@ -5,20 +5,22 @@ namespace LrWallPaper.Services;
 
 public record HistoryCapture
 {
-    public string FileBaseName { get; set; }
-    public string FileExtension { get; set; }    
+    public string? FileBaseName { get; set; }
+    public string? FileExtension { get; set; }    
     public DateTime CaptureTime { get; set; }
-    public string AbsolutePath { get; set; }
+    public string? AbsolutePath { get; set; }
 }
 public class BusinessJob : BackgroundService
 {
     private readonly ILogger<BusinessJob> _logger;
     private readonly ISQLiteFactory _sqliteFactory;
+    private readonly ICaptureRepository _captureRepository;
     private IEnumerable<HistoryCapture> _historyCaptures;
-    public BusinessJob(ISQLiteFactory sQLiteFactory, ILogger<BusinessJob> logger)
+    public BusinessJob(ISQLiteFactory sQLiteFactory, ILogger<BusinessJob> logger, ICaptureRepository captureRepository)
     {
-        _logger = logger;
         _sqliteFactory = sQLiteFactory;
+        _logger = logger;
+        _captureRepository = captureRepository;
         _historyCaptures = Array.Empty<HistoryCapture>();
     }
 
@@ -62,6 +64,7 @@ public class BusinessJob : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        await _captureRepository.GetRecentCapturesAsync();
         var firstTime = true;
         var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
         _logger.LogInformation("Now set timer");
@@ -93,7 +96,7 @@ public class BusinessJob : BackgroundService
                 _logger.LogInformation("BackupState");
                 WallPaperHelper.BackupState();
                 _logger.LogInformation("SilentSet");
-                WallPaperHelper.SilentSet(capture.AbsolutePath, WallpaperStyle.Fill);
+                WallPaperHelper.SilentSet(capture.AbsolutePath!, WallpaperStyle.Fill);
                 await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
             }
         }

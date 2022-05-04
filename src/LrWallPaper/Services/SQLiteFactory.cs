@@ -31,7 +31,7 @@ public class SQLiteFactory : ISQLiteFactory
 
 public record TempDBInfo
 {
-    public string Path { get; set; }
+    public string? Path { get; set; }
     public DateTime CopyTime { get; set; }
 }
 
