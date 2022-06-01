@@ -5,7 +5,12 @@ VisualStudioVersion = 17.1.32328.378
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LrWallPaper", "src\LrWallPaper\LrWallPaper.csproj", "{F25E5A6B-6D59-4917-ABC4-D8F7EA84FEED}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LrWallPaper.Tests", "test\LrWallPaper.Tests\LrWallPaper.Tests.csproj", "{31A3BA31-C5D4-4D2F-B0B9-30508A0E0F81}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LrWallPaper.Tests", "test\LrWallPaper.Tests\LrWallPaper.Tests.csproj", "{31A3BA31-C5D4-4D2F-B0B9-30508A0E0F81}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{146580BA-31E3-4E2A-80A3-8744D51B9071}"
+	ProjectSection(SolutionItems) = preProject
+		README.md = README.md
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

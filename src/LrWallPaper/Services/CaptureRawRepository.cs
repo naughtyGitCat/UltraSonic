@@ -1,6 +1,7 @@
 ﻿using MetadataExtractor;
 using Microsoft.Extensions.Logging;
 using System.Linq;
+using LrWallPaper.Helpers;
 using Newtonsoft.Json;
 
 namespace LrWallPaper.Services
@@ -15,24 +16,11 @@ namespace LrWallPaper.Services
             _directories = new[] { "D:\\摄影" };                  
         }
 
-
-        private IEnumerable<string> GetFilesRecursively(string directory)
-        {
-            IEnumerable<string> files = Array.Empty<string>();
-            files = files.Union(System.IO.Directory.GetFiles(directory, "*.*"));
-            var dirs = System.IO.Directory.GetDirectories(directory, "*.*");
-            foreach (var d in dirs)
-            {
-                files = files.Union(GetFilesRecursively(d));
-            }
-            return files;
-        }
-
         public Task<IEnumerable<HistoryCapture>> GetRecentCapturesAsync()
         {
             foreach (var dir in _directories)
             {
-                var files = GetFilesRecursively(dir);
+                var files = FileHelper.GetFilesRecursively(dir);
                 foreach (var f in files)
                 {
                     _logger.LogInformation(f);
