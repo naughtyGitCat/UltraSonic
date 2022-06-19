@@ -8,6 +8,8 @@
         public string? CameraModel { get; set; }
 
         public string? LensModel { get; set; }
+
+        public long? FileSize { get; set; }
     }
     public static class EXIFHelper
     {
@@ -16,14 +18,18 @@
             var directories = MetadataExtractor.ImageMetadataReader.ReadMetadata(file);
             var exifMainDirectories = directories.Where(i => i.Name == "Exif IFD0");
             var exifSubDirectories = directories.Where(i => i.Name == "Exif SubIFD");
+            var fileDirectories = directories.Where(i => i.Name == "File");
+            
             if (exifMainDirectories is null) throw new Exception($"{file} has no Exif IFD0 Info");
             if (exifSubDirectories is null) throw new Exception($"{file} has no Exif SubIFD Info");
+            if (fileDirectories is null) throw new Exception($"{file} has no Exif File Info");
             var d = new EXIFDigest 
             {
                 CameraMaker = GetCameraMaker(exifMainDirectories!.First()),
                 CameraModel=GetCameraMode(exifMainDirectories!.First()),
                 PhotoDateTime = GetPhotoDateTime(exifMainDirectories!.First()),
-                LensModel = GetPhotoLensModel(exifMainDirectories!.First())
+                LensModel = GetPhotoLensModel(exifMainDirectories!.First()),
+                FileSize =GetPhotoFileSize(fileDirectories!.First())
             };
 
             return d;
@@ -81,5 +87,20 @@
                 return null;
             }
         }
+
+        private static long? GetPhotoFileSize(MetadataExtractor.Directory file)
+        {
+            // File - File Size = 8768492 bytes
+            var rawTags = file.Tags.Where(t => t.Name == "File Size").ToArray();
+            if (rawTags.Any())
+            {
+                return long.Parse(rawTags[0].Description!.Split(" ").First());
+            }
+            else
+            {
+                return null;
+            }
+        }
+
     }
 }

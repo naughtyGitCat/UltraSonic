@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "LrWallPaper.Tests": {
+      "commandName": "Project"
+    },
+    "Docker": {
+      "commandName": "Docker"
+    }
+  }
+}

@@ -106,9 +106,9 @@ namespace LrWallPaper.Tests
             var file = "Asserts/IMG_4262.Canon.Rebel.SL1.JPG";
             var directories = MetadataExtractor.ImageMetadataReader.ReadMetadata(file);
 
-            foreach (var directory in directories)
-               foreach (var tag in directory.Tags)
-                  _logger.WriteLine($"{directory.Name} - {tag.Name} = {tag.Description}");
+            // foreach (var directory in directories)
+            //   foreach (var tag in directory.Tags)
+            //      _logger.WriteLine($"{directory.Name} - {tag.Name} = {tag.Description}");
 
             // IFD: image file directory
             var exifMainDirectories = directories.Where(i => i.Name == "Exif IFD0");
