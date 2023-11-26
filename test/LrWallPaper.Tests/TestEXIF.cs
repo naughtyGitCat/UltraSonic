@@ -139,7 +139,7 @@ namespace LrWallPaper.Tests
             // foreach (var directory in directories)
             //    foreach (var tag in directory.Tags)
             //       _logger.WriteLine($"{directory.Name} - {tag.Name} = {tag.Description}");
-            
+
             // IFD: image file directory
             var exifMainDirectories = directories.Where(i => i.Name == "Exif IFD0");
             Assert.NotEmpty(exifMainDirectories.Where(i => i.Tags.Where(t => t.Name == "Make" && t.Description == "Canon").Any()));
@@ -156,6 +156,16 @@ namespace LrWallPaper.Tests
             // Assert.NotEmpty(gpsDirectories.Where(i => i.Tags.Where(t => t.Name == "GPS Altitude Ref" && t.Description == "Sea level").Any()));
             // Assert.NotEmpty(gpsDirectories.Where(i => i.Tags.Where(t => t.Name == "GPS Latitude Ref" && t.Description == "N").Any()));
             // Assert.NotEmpty(gpsDirectories.Where(i => i.Tags.Where(t => t.Name == "GPS Longitude Ref" && t.Description == "E").Any()));
+        }
+
+        [Fact]
+        public void TestRecoveredJPG()
+        {
+            var file = "Asserts/[000016].Recovered.jpg";
+            var directories = MetadataExtractor.ImageMetadataReader.ReadMetadata(file);
+            foreach (var directory in directories)
+                foreach (var tag in directory.Tags)
+                   _logger.WriteLine($"{directory.Name} - {tag.Name} = {tag.Description}");
         }
     }
 }

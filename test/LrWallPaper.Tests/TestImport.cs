@@ -12,6 +12,7 @@ using LrWallPaper.Helpers;
 using Newtonsoft.Json;
 using System.IO;
 using MediaDevices;
+using Windows;
 
 namespace LrWallPaper.Tests
 {
@@ -92,19 +93,39 @@ namespace LrWallPaper.Tests
             }
         }
 
+
         [Fact]
         public void TestGetMediaDevices()
         {
             var devices = MediaDevice.GetDevices();
             foreach (var device in devices)
             {
+                // usefull
+                // \\?\usb#vid_2717&pid_ff10#6p7hv8zxai5pwckb#{6ac27878-a6fa-4155-ba85-f98f491d4f33}
+                // \\?\usb#vid_04a9&pid_32f5#5&38e97a59&0&10#{6ac27878-a6fa-4155-ba85-f98f491d4f33}
+                // \\?\usb#vid_05ac&pid_12a8&mi_00#6&719d9d9&0&0000#{6ac27878-a6fa-4155-ba85-f98f491d4f33}
+                // 14 Pro PlugTimes.1 \\?\usb#vid_05ac&pid_12a8&mi_00#6&2eab6cf0&0&0000#{6ac27878-a6fa-4155-ba85-f98f491d4f33}
+                // 14 Pro PlugTimes.2 \\?\usb#vid_05ac&pid_12a8&mi_00#6&2eab6cf0&0&0000#{6ac27878-a6fa-4155-ba85-f98f491d4f33}
                 _testOutputHelper.WriteLine($"device.DeviceId, {device.DeviceId}");
+
                 // _testOutputHelper.WriteLine($"device.SerialNumber, {device.SerialNumber}");
+                // useful
+                // Redmi Note 8 Pro
+                // Canon EOS R6
+                // Apple iPhone (test case: iphone6)
                 _testOutputHelper.WriteLine($"device.FriendlyName, {device.FriendlyName}");
                 // _testOutputHelper.WriteLine($"device.Model, {device.Model}");
                 // _testOutputHelper.WriteLine($"device.ModelUniqueId, {device.ModelUniqueId}");
                 // _testOutputHelper.WriteLine($"device.DateTime, {device.DateTime}");
+                // usefull
+                //  Redmi Note 8 Pro
+                //  Canon EOS R6
+                //  Apple iPhone
                 _testOutputHelper.WriteLine($"device.Description, {device.Description}");
+                // useful
+                // Xiaomi
+                // Canon.Inc
+                // Apple Inc.
                 _testOutputHelper.WriteLine($"device.Manufacturer, {device.Manufacturer}");
                 // _testOutputHelper.WriteLine($"device.FirmwareVersion, {device.FirmwareVersion}");
                 // _testOutputHelper.WriteLine($"device.PowerLevel, {device.PowerLevel}");
@@ -113,6 +134,8 @@ namespace LrWallPaper.Tests
                 _testOutputHelper.WriteLine($"device.IsConnected, {device.IsConnected}");
                 // _testOutputHelper.WriteLine($"device.Protocol, {device.Protocol}");
                 // _testOutputHelper.WriteLine($"device.SyncPartner, {device.SyncPartner}");
+                // _testOutputHelper.WriteLine($"device.FunctionalUniqueId, {device.FunctionalUniqueId}");
+                // _testOutputHelper.WriteLine($"device.NetworkIdentifier, {device.NetworkIdentifier}");
             }
         }
     }
