@@ -97,6 +97,7 @@ namespace LrWallPaper.Tests
         [Fact]
         public void TestGetMediaDevices()
         {
+            _testOutputHelper.WriteLine("######################TestGetMediaDevices########################");
             var devices = MediaDevice.GetDevices();
             foreach (var device in devices)
             {
