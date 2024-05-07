@@ -101,9 +101,29 @@ namespace LrWallPaper.Tests
             var devices = MediaDevice.GetDevices();
             foreach (var device in devices)
             {
-                _testOutputHelper.WriteLine($"device.DeviceId, {device.DeviceId}");
+                var t = device.GetType();
+                var props = t.GetProperties();
 
-                // _testOutputHelper.WriteLine($"device.SerialNumber, {device.SerialNumber}");
+                foreach (var prop in props) 
+                {
+                    try
+                    {
+                        var v = prop.GetValue(device, null);
+                        _testOutputHelper.WriteLine($"#device.{prop.Name}, {v}");
+                    }
+                    catch (NotConnectedException _)
+                    {
+                        _testOutputHelper.WriteLine("");
+                    }
+                    catch (Exception e) when (e is not NotConnectedException)
+                    {
+                        _testOutputHelper.WriteLine(e.ToString());
+                        throw;
+                    }
+                }
+
+                //  _testOutputHelper.WriteLine($"device.SerialNumber, {device.UseDeviceStage}");
+
                 // useful
                 // Redmi Note 8 Pro
                 // Canon EOS R6
