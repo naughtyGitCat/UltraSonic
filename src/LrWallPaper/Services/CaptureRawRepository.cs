@@ -45,6 +45,7 @@ namespace LrWallPaper.Services
                 var files = FileHelper.GetFilesRecursively(dir);
                 foreach (var f in files)
                 {
+                    _logger.LogDebug("{f}");
                     if (!IsPicture(f)) continue;
                     var directories = ImageMetadataReader.ReadMetadata(f);
                     var rawTimeTags = new List<Tuple<string,string>>();
