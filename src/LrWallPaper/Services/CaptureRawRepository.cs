@@ -40,15 +40,15 @@ namespace LrWallPaper.Services
                 {
                     _logger.LogDebug("{f}",f);
                     if (!IsPicture(f)) continue;
-                    var directories = ImageMetadataReader.ReadMetadata(f);
+                    var imageMetaDirectories = ImageMetadataReader.ReadMetadata(f);
                     var rawTimeTags = new List<Tuple<string,string>>();
-                    foreach (var info in directories)
+                    foreach (var info in imageMetaDirectories)
                     {
                         // _logger.LogInformation("{f}", JsonConvert.SerializeObject(info.Tags.Select(i => i.Name), Formatting.Indented));
                         // _logger.LogInformation("{f}", JsonConvert.SerializeObject(info.Tags.Select(i => i.Name)));
                         foreach (var tag in info.Tags)
                         {
-                            if (!tag.Name.ToLower().Contains("date") && !tag.Name.ToLower().Contains("time")) continue;
+                            if (!tag.Name.ToLower().Contains("date") && !tag.Name.ToLower().Contains("Date/Time")) continue;
                             if (!string.IsNullOrEmpty(tag.Description))rawTimeTags.Add(new Tuple<string, string>(tag.Name,tag.Description));
                         }
                     }
@@ -59,7 +59,7 @@ namespace LrWallPaper.Services
                         try
                         {
                             _logger.LogInformation("found new picture time prop: {f}, {tagName}={tagValue}", f, tag.Item1, tag.Item2);
-                            var dt = Convert.ToDateTime(tag.Item2);;
+                            var dt = DateTime.Parse(tag.Item2);;
                             if (times.Contains(dt)) continue;
                             _logger.LogInformation("found new picture time prop: {f}, {tagName}={tagValue}", f, tag.Item1, dt);
                             times.Add(dt);
@@ -67,6 +67,7 @@ namespace LrWallPaper.Services
                         catch (FormatException e)
                         {
                             _logger.LogWarning(e,"convert time related tag to datetime failed");
+                            break;
                         }
                     }
                     if (!times.Any()) continue;
@@ -79,6 +80,7 @@ namespace LrWallPaper.Services
                     });
                     _logger.LogDebug("file: {file}", f);
                 }
+                break;
             }
             return captures;
         }
