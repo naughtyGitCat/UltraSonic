@@ -55,7 +55,14 @@ namespace LrWallPaper.Services
                             foreach (var info in directories)
                             {
                                 // _logger.LogInformation("{f}", JsonConvert.SerializeObject(info.Tags.Select(i => i.Name), Formatting.Indented));
-                                _logger.LogInformation("{f}", JsonConvert.SerializeObject(info.Tags.Select(i => i.Name)));
+                                // _logger.LogInformation("{f}", JsonConvert.SerializeObject(info.Tags.Select(i => i.Name)));
+                                foreach (var tag in info.Tags)
+                                {
+                                    if (tag.Name.Contains("date") || tag.Name.Contains("time"))
+                                    {
+                                        _logger.LogInformation("{f}, {tagName}={tagValue}", f, tag.Name, tag.Description);
+                                    }
+                                }
                             }
                             _logger.LogDebug("file: {file}", f);
                             break;
