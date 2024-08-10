@@ -34,36 +34,37 @@ namespace LrWallPaper.Services
 
         public Task<IEnumerable<HistoryCapture>> GetRecentCapturesAsync()
         {
-            try
-            {
+   
                 foreach (var dir in _directories)
                 {
-                    var files = FileHelper.GetFilesRecursively(dir);
-                    foreach (var f in files)
+                    try
                     {
-                        _logger.LogDebug("{file}", f);
-                        if (Path.GetFileName(f).StartsWith('.')) continue;
-                        if (f.EndsWith(".DS_Store")) continue;
-                        if (f.ToLower().EndsWith(".jpg")) continue;
-                        if (f.ToLower().EndsWith(".mp4")) continue;
-                        if (f.ToLower().EndsWith(".7z")) continue;
-                        if (f.ToLower().EndsWith(".pages")) continue;
-                        if (f.ToLower().EndsWith(".psd")) continue;
-                        if (f.ToLower().EndsWith(".db")) continue;
-                        if (f.ToLower().EndsWith(".lrcat")) continue;
-                        var directories = ImageMetadataReader.ReadMetadata(f);
-                        foreach (var info in directories)
+                        var files = FileHelper.GetFilesRecursively(dir);
+                        foreach (var f in files)
                         {
-                            _logger.LogInformation("{f}", JsonConvert.SerializeObject(info.Tags.Select(i => i.Name), Formatting.Indented));
+                            _logger.LogDebug("{file}", f);
+                            if (Path.GetFileName(f).StartsWith('.')) continue;
+                            if (f.EndsWith(".DS_Store")) continue;
+                            if (f.ToLower().EndsWith(".jpg")) continue;
+                            if (f.ToLower().EndsWith(".mp4")) continue;
+                            if (f.ToLower().EndsWith(".7z")) continue;
+                            if (f.ToLower().EndsWith(".pages")) continue;
+                            if (f.ToLower().EndsWith(".psd")) continue;
+                            if (f.ToLower().EndsWith(".db")) continue;
+                            if (f.ToLower().EndsWith(".lrcat")) continue;
+                            var directories = ImageMetadataReader.ReadMetadata(f);
+                            foreach (var info in directories)
+                            {
+                                _logger.LogInformation("{f}", JsonConvert.SerializeObject(info.Tags.Select(i => i.Name), Formatting.Indented));
+                            }
+                            break;
                         }
-                        break;
+                    }
+                    catch (Exception ex) when (ex is UnauthorizedAccessException) 
+                    {
+                        _logger.LogWarning(ex, "access denied");
                     }
                 }
-            }
-            catch (Exception ex) when (ex is System.UnauthorizedAccessException) 
-            {
-                _logger.LogWarning(ex, "access denied");
-            }
 
             throw new NotImplementedException();
         }
