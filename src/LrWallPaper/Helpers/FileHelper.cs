@@ -5,14 +5,25 @@
 
         public static IEnumerable<string> GetFilesRecursively(string directory)
         {
-            IEnumerable<string> files = Array.Empty<string>();
-            files = files.Union(Directory.GetFiles(directory, "*.*"));
-            var dirs = Directory.GetDirectories(directory, "*.*");
-            foreach (var d in dirs)
+            IEnumerable<string> allFiles = Array.Empty<string>();
+            try
             {
-                files = files.Union(GetFilesRecursively(d));
+                var files = Directory.GetFiles(directory, "*.*");
+                allFiles = allFiles.Union(files);
             }
-            return files;
+            // when unauthorized access exception, do not handle
+            catch (UnauthorizedAccessException){}
+            try
+            {
+                var dirs = Directory.GetDirectories(directory, "*.*");
+                foreach (var d in dirs)
+                {
+                    allFiles = allFiles.Union(GetFilesRecursively(d));
+                }
+            }
+            // when unauthorized access exception, do not handle
+            catch (UnauthorizedAccessException) {}
+            return allFiles;
         }
     }
     
