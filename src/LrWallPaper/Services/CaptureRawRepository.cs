@@ -21,8 +21,7 @@ namespace LrWallPaper.Services
         private bool IsPicture(string fileName)
         {
             _logger.LogInformation("check file {fileName} is picture by name", fileName);
-            if (Path.GetFileName(fileName).StartsWith('.')) return false;
-            return ImageSuffixes.PossibleSuffixes.Contains(Path.GetExtension(fileName).ToLower());
+            return !Path.GetFileName(fileName).StartsWith('.') && ImageSuffixes.PossibleSuffixes.Contains(Path.GetExtension(fileName).ToLower());
         }
 
         public Task<IEnumerable<HistoryCapture>> GetRecentCapturesAsync()
