@@ -45,15 +45,7 @@ namespace LrWallPaper.Services
                 var files = FileHelper.GetFilesRecursively(dir);
                 foreach (var f in files)
                 {
-                    if (Path.GetFileName(f).StartsWith('.')) continue;
-                    if (f.EndsWith(".DS_Store")) continue;
-                    if (f.ToLower().EndsWith(".jpg")) continue;
-                    if (f.ToLower().EndsWith(".mp4")) continue;
-                    if (f.ToLower().EndsWith(".7z")) continue;
-                    if (f.ToLower().EndsWith(".pages")) continue;
-                    if (f.ToLower().EndsWith(".psd")) continue;
-                    if (f.ToLower().EndsWith(".db")) continue;
-                    if (f.ToLower().EndsWith(".lrcat")) continue;
+                    if (!IsPicture(f)) continue;
                     var directories = ImageMetadataReader.ReadMetadata(f);
                     var rawTimeTags = new List<Tuple<string,string>>();
                     foreach (var info in directories)
