@@ -42,7 +42,6 @@ namespace LrWallPaper.Services
                         var files = FileHelper.GetFilesRecursively(dir);
                         foreach (var f in files)
                         {
-                            _logger.LogDebug("{file}", f);
                             if (Path.GetFileName(f).StartsWith('.')) continue;
                             if (f.EndsWith(".DS_Store")) continue;
                             if (f.ToLower().EndsWith(".jpg")) continue;
@@ -58,6 +57,7 @@ namespace LrWallPaper.Services
                                 // _logger.LogInformation("{f}", JsonConvert.SerializeObject(info.Tags.Select(i => i.Name), Formatting.Indented));
                                 _logger.LogInformation("{f}", JsonConvert.SerializeObject(info.Tags.Select(i => i.Name)));
                             }
+                            _logger.LogDebug("file: {file}", f);
                             break;
                         }
                     }
