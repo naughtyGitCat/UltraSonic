@@ -10,11 +10,20 @@
         public static readonly IEnumerable<string> PentaxSuffixes = new[] { "pef" };
         public static readonly IEnumerable<string> PanasonicSuffixes = new[] { "rw2" };
         public static readonly IEnumerable<string> OlympusSuffixes = new[] { "orf" };
+        public static readonly IEnumerable<string> PossibleSuffixes = [
+            ..CanonSuffixes, 
+            ..CommonSuffixes, 
+            ..SonySuffixes, 
+            ..NikonSuffixes, 
+            ..FujiSuffixes, 
+            ..PentaxSuffixes, 
+            ..PanasonicSuffixes, 
+            ..OlympusSuffixes];
     }
 
     public static class DeviceShotPaths
     {
-        public const string Andriod = "DCIM/Camera";
+        public const string Android = "DCIM/Camera";
         public const string Apple = "DCIM/100Apple";
     }
 
