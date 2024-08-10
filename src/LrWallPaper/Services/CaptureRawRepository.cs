@@ -14,7 +14,7 @@ namespace LrWallPaper.Services
         public CaptureRawRepository(ILogger<CaptureRawRepository> logger)
         {
             _logger = logger;
-            _directories = new[] { "D:\\摄影" };                  
+            _directories = ["D:\\"];                  
         }
 
         private bool IsPicture(string fileName)
@@ -34,29 +34,37 @@ namespace LrWallPaper.Services
 
         public Task<IEnumerable<HistoryCapture>> GetRecentCapturesAsync()
         {
-            foreach (var dir in _directories)
+            try
             {
-                var files = FileHelper.GetFilesRecursively(dir);
-                foreach (var f in files)
+                foreach (var dir in _directories)
                 {
-                    _logger.LogDebug("{file}",f);
-                    if (Path.GetFileName(f).StartsWith('.')) continue;
-                    if (f.EndsWith(".DS_Store")) continue;
-                    if (f.ToLower().EndsWith(".jpg")) continue;
-                    if (f.ToLower().EndsWith(".mp4")) continue;
-                    if (f.ToLower().EndsWith(".7z")) continue;
-                    if (f.ToLower().EndsWith(".pages")) continue;
-                    if (f.ToLower().EndsWith(".psd")) continue;
-                    if (f.ToLower().EndsWith(".db")) continue;
-                    if (f.ToLower().EndsWith(".lrcat")) continue;
-                    var directories = ImageMetadataReader.ReadMetadata(f);
-                    foreach (var info in directories)
+                    var files = FileHelper.GetFilesRecursively(dir);
+                    foreach (var f in files)
                     {
-                        _logger.LogInformation("{f}",JsonConvert.SerializeObject(info.Tags.Select(i=>i.Name), Formatting.Indented));
+                        _logger.LogDebug("{file}", f);
+                        if (Path.GetFileName(f).StartsWith('.')) continue;
+                        if (f.EndsWith(".DS_Store")) continue;
+                        if (f.ToLower().EndsWith(".jpg")) continue;
+                        if (f.ToLower().EndsWith(".mp4")) continue;
+                        if (f.ToLower().EndsWith(".7z")) continue;
+                        if (f.ToLower().EndsWith(".pages")) continue;
+                        if (f.ToLower().EndsWith(".psd")) continue;
+                        if (f.ToLower().EndsWith(".db")) continue;
+                        if (f.ToLower().EndsWith(".lrcat")) continue;
+                        var directories = ImageMetadataReader.ReadMetadata(f);
+                        foreach (var info in directories)
+                        {
+                            _logger.LogInformation("{f}", JsonConvert.SerializeObject(info.Tags.Select(i => i.Name), Formatting.Indented));
+                        }
+                        break;
                     }
-                    break;
                 }
             }
+            catch (Exception ex) when (ex is System.UnauthorizedAccessException) 
+            {
+                _logger.LogWarning(ex, "access denied");
+            }
+
             throw new NotImplementedException();
         }
 
