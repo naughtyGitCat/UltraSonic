@@ -70,6 +70,7 @@ namespace LrWallPaper.Services
                     var times = new List<DateTime>();
                     foreach (var tag in rawTimeTags)
                     {
+                        _logger.LogInformation("found new picture time prop: {f}, {tagName}={tagValue}", f, tag.Item1, tag.Item2);
                         var dt = Convert.ToDateTime(tag.Item2);;
                         if (times.Contains(dt)) continue;
                         _logger.LogInformation("found new picture time prop: {f}, {tagName}={tagValue}", f, tag.Item1, dt);
