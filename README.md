@@ -4,4 +4,4 @@ find (jpg/JPG)s in Lightroom database which match todays month and day number =>
 																									     => None => Go find lastday's lastday
 
 ### refs
-[exif](https://www.media.mit.edu/pia/Research/deepview/exif.html)
+[exif](https://www.media.mit.edu/pia/Research/deepview/exif.html) 
