@@ -1,6 +1,7 @@
 ﻿using MetadataExtractor;
 using Microsoft.Extensions.Logging;
 using System.Linq;
+using LrWallPaper.Common;
 using LrWallPaper.Helpers;
 using Microsoft.AspNetCore.Routing.Constraints;
 using Newtonsoft.Json;
@@ -21,15 +22,7 @@ namespace LrWallPaper.Services
         {
             _logger.LogInformation("check file {fileName} is picture by name", fileName);
             if (Path.GetFileName(fileName).StartsWith('.')) return false;
-            if (fileName.EndsWith(".DS_Store")) return false;
-            if (fileName.ToLower().EndsWith(".jpg")) return false;
-            if (fileName.ToLower().EndsWith(".mp4")) return false;
-            if (fileName.ToLower().EndsWith(".7z")) return false;
-            if (fileName.ToLower().EndsWith(".pages")) return false;
-            if (fileName.ToLower().EndsWith(".psd")) return false;
-            if (fileName.ToLower().EndsWith(".db")) return false;
-            if (fileName.ToLower().EndsWith(".lrcat")) return false;
-            return true;
+            return ImageSuffixes.PossibleSuffixes.Contains(Path.GetExtension(fileName));
         }
 
         public Task<IEnumerable<HistoryCapture>> GetRecentCapturesAsync()
@@ -45,7 +38,7 @@ namespace LrWallPaper.Services
                 var files = FileHelper.GetFilesRecursively(dir);
                 foreach (var f in files)
                 {
-                    _logger.LogDebug("{f}");
+                    _logger.LogDebug("{f}",f);
                     if (!IsPicture(f)) continue;
                     var directories = ImageMetadataReader.ReadMetadata(f);
                     var rawTimeTags = new List<Tuple<string,string>>();
