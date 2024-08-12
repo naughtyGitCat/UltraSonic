@@ -30,7 +30,7 @@ namespace LrWallPaper.Services
         public CaptureRawRepository(ILogger<CaptureRawRepository> logger)
         {
             _logger = logger;
-            _directories = ["D:\\AI"];                  
+            _directories = ["D:\\"];                  
         }
 
         private bool IsPicture(string fileName)
