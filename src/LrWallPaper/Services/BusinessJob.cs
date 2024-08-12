@@ -1,5 +1,6 @@
 // psyduck 20220409
 using System;
+using LrWallPaper.Helpers;
 
 namespace LrWallPaper.Services;
 
@@ -7,7 +8,7 @@ public record HistoryCapture
 {
     public string? FileBaseName { get; set; }
     public string? FileExtension { get; set; }    
-    public DateTime CaptureTime { get; set; }
+    public EXIFDigest ExifDigest { get; set; }
     public string? AbsolutePath { get; set; }
 }
 public class BusinessJob : BackgroundService
