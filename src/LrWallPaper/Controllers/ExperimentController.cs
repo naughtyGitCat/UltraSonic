@@ -18,6 +18,7 @@ public class ExperimentController : ControllerBase
     [HttpGet("{days:int}")]
     public object Get(int days)
     {
+        _logger.LogInformation("days: {d}",days);
         return _captureRepository.GetRecentCaptures(new TimeSpan(days, 0,0,0));
     }
 }
