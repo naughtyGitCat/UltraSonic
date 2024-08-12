@@ -55,7 +55,7 @@ namespace LrWallPaper.Services
 
         private IEnumerable<HistoryCapture> GetRecentCaptures()
         {
-            IEnumerable<HistoryCapture> captures = Array.Empty<HistoryCapture>();
+            var captures = new List<HistoryCapture>();
             foreach (var dir in _directories)
             {
                 if (dir.Contains("iCloud Photos")) continue;
@@ -64,44 +64,54 @@ namespace LrWallPaper.Services
                 {
                     _logger.LogDebug("{f}",f);
                     if (!IsPicture(f)) continue;
-                    var imageMetaDirectories = ImageMetadataReader.ReadMetadata(f);
-                    var rawTimeTags = new List<Tuple<string,string>>();
-                    foreach (var info in imageMetaDirectories)
+                    try
                     {
-                        // _logger.LogInformation("{f}", JsonConvert.SerializeObject(info.Tags.Select(i => i.Name), Formatting.Indented));
-                        // _logger.LogInformation("{f}", JsonConvert.SerializeObject(info.Tags.Select(i => i.Name)));
-                        foreach (var tag in info.Tags)
+                        var imageMetaDirectories = ImageMetadataReader.ReadMetadata(f);
+                        var rawTimeTags = new List<Tuple<string,string>>();
+                        foreach (var info in imageMetaDirectories)
                         {
-                            if (!tag.Name.Contains("Date/Time") && !tag.Name.Contains("Date/Time")) continue;
-                            if (!string.IsNullOrEmpty(tag.Description))rawTimeTags.Add(new Tuple<string, string>(tag.Name,tag.Description));
+                            // _logger.LogInformation("{f}", JsonConvert.SerializeObject(info.Tags.Select(i => i.Name), Formatting.Indented));
+                            // _logger.LogInformation("{f}", JsonConvert.SerializeObject(info.Tags.Select(i => i.Name)));
+                            foreach (var tag in info.Tags)
+                            {
+                                if (!tag.Name.Contains("Date/Time") && !tag.Name.Contains("Date/Time")) continue;
+                                if (!string.IsNullOrEmpty(tag.Description))rawTimeTags.Add(new Tuple<string, string>(tag.Name,tag.Description));
+                            }
+                        }
+                        if (!rawTimeTags.Any()) continue;
+                        var times = new List<DateTime>();
+                        foreach (var tag in rawTimeTags)
+                        {
+                            try
+                            {
+                                _logger.LogInformation("found new picture time prop: {f}, {tagName}={tagValue}", f, tag.Item1, tag.Item2);
+                                var dt = ParseDateTime(tag.Item2);;
+                                if (times.Contains(dt)) continue;
+                                _logger.LogInformation("found new picture time prop: {f}, {tagName}={tagValue}", f, tag.Item1, dt);
+                                times.Add(dt);
+                            }
+                            catch (FormatException e)
+                            {
+                                _logger.LogWarning(e,"convert time related tag to datetime failed, {tagName}={tagValue}", tag.Item1, tag.Item2);
+                            }
+                        }
+                        if (!times.Any()) continue;
+                        captures.Add(new HistoryCapture
+                        {
+                            AbsolutePath = f,
+                            CaptureTime = times.First(),
+                            FileBaseName = Path.GetFileName(f),
+                            FileExtension = Path.GetExtension(f)
+                        });
+                        _logger.LogDebug("file: {file}", f);
+                    }
+                    catch (Exception e)
+                    {
+                        if (e is IOException && e.Message.Contains(" Access to the cloud file is denied"))
+                        {
+                            _logger.LogWarning(e, "access to {f} failed",f);
                         }
                     }
-                    if (!rawTimeTags.Any()) continue;
-                    var times = new List<DateTime>();
-                    foreach (var tag in rawTimeTags)
-                    {
-                        try
-                        {
-                            _logger.LogInformation("found new picture time prop: {f}, {tagName}={tagValue}", f, tag.Item1, tag.Item2);
-                            var dt = ParseDateTime(tag.Item2);;
-                            if (times.Contains(dt)) continue;
-                            _logger.LogInformation("found new picture time prop: {f}, {tagName}={tagValue}", f, tag.Item1, dt);
-                            times.Add(dt);
-                        }
-                        catch (FormatException e)
-                        {
-                            _logger.LogWarning(e,"convert time related tag to datetime failed, {tagName}={tagValue}", tag.Item1, tag.Item2);
-                        }
-                    }
-                    if (!times.Any()) continue;
-                    captures = captures.Append(new HistoryCapture
-                    {
-                        AbsolutePath = f,
-                        CaptureTime = times.First(),
-                        FileBaseName = Path.GetFileName(f),
-                        FileExtension = Path.GetExtension(f)
-                    });
-                    _logger.LogDebug("file: {file}", f);
                 }
                 break;
             }
