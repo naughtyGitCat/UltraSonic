@@ -25,6 +25,30 @@
             catch (UnauthorizedAccessException) {}
             return allFiles;
         }
+        
+        public static IEnumerable<string> GetFilesRecursively(string directory, string[] ignorePathPatterns)
+        {
+            if (ignorePathPatterns.Any(directory.Contains)) return Array.Empty<string>();
+            IEnumerable<string> allFiles = Array.Empty<string>();
+            try
+            {
+                var files = Directory.GetFiles(directory, "*.*");
+                allFiles = allFiles.Union(files);
+            }
+            // when unauthorized access exception, do not handle
+            catch (UnauthorizedAccessException){}
+            try
+            {
+                var dirs = Directory.GetDirectories(directory, "*.*");
+                foreach (var d in dirs)
+                {
+                    allFiles = allFiles.Union(GetFilesRecursively(d));
+                }
+            }
+            // when unauthorized access exception, do not handle
+            catch (UnauthorizedAccessException) {}
+            return allFiles;
+        }
     }
     
     public static class DirectoryHelper
