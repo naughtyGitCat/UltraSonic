@@ -65,7 +65,6 @@ namespace LrWallPaper.Services
             var captures = new List<HistoryCapture>();
             foreach (var dir in _directories)
             {
-                // var files = FileHelper.GetFilesRecursively(dir, ["扫描文件", "庐山", "Lightroom Catalog.lrcat-data"]);
                 var files = Directory.GetFiles(dir, "*.*", new EnumerationOptions
                 {
                     MaxRecursionDepth = 1,
@@ -74,7 +73,6 @@ namespace LrWallPaper.Services
                 });
                 foreach (var f in files)
                 {
-                    _logger.LogDebug("{f}",f);
                     if (!IsPicture(f)) continue;
                     try
                     {
@@ -82,8 +80,6 @@ namespace LrWallPaper.Services
                         var rawTimeTags = new List<DateTimeTag>();
                         foreach (var info in imageMetaDirectories)
                         {
-                            // _logger.LogInformation("{f}", JsonConvert.SerializeObject(info.Tags.Select(i => i.Name), Formatting.Indented));
-                            // _logger.LogInformation("{f}", JsonConvert.SerializeObject(info.Tags.Select(i => i.Name)));
                             foreach (var tag in info.Tags)
                             {
                                 if (!tag.Name.Contains("Date/Time") && !tag.Name.Contains("Date/Time")) continue;
@@ -129,21 +125,70 @@ namespace LrWallPaper.Services
             return captures;
         }
 
-        public Task<IEnumerable<HistoryCapture>> GetSameDayCapturesAsync()
+        public IEnumerable<HistoryCapture> GetSameDayCapturesAsync()
         {
+            var captures = new List<HistoryCapture>();
             foreach (var dir in _directories)
             {
-                var files = FileHelper.GetFilesRecursively(dir);
+                var files = Directory.GetFiles(dir, "*.*", new EnumerationOptions
+                {
+                    MaxRecursionDepth = 1,
+                    IgnoreInaccessible = true,
+                    RecurseSubdirectories = true
+                });
                 foreach (var f in files)
                 {
-                    if (!IsPicture(f))continue;
-                    var imageMetaDirectories = ImageMetadataReader.ReadMetadata(f);
-                    foreach (var info in imageMetaDirectories)
+                    if (!IsPicture(f)) continue;
+                    try
                     {
+                        var imageMetaDirectories = ImageMetadataReader.ReadMetadata(f);
+                        var rawTimeTags = new List<DateTimeTag>();
+                        foreach (var info in imageMetaDirectories)
+                        {
+                            foreach (var tag in info.Tags)
+                            {
+                                if (!tag.Name.Contains("Date/Time") && !tag.Name.Contains("Date/Time")) continue;
+                                if (!string.IsNullOrEmpty(tag.Description))rawTimeTags.Add(new DateTimeTag{TagName = tag.Name,TagDescription = tag.Description, TagDirectory = info.Name});
+                            }
+                        }
+                        if (!rawTimeTags.Any()) continue;
+                        var times = new List<DateTime>();
+                        foreach (var tag in rawTimeTags)
+                        {
+                            try
+                            {
+                                _logger.LogInformation("found new picture time prop: {f}, {tagName}={tagValue}  @ {dir}", f, tag.TagName, tag.TagDescription, tag.TagDirectory);
+                                var dt = ParseDateTime(tag.TagDescription);;
+                                if (times.Contains(dt)) continue;
+                                _logger.LogInformation("found new picture time prop: {f}, {tagName}={tagValue}", f, tag.TagName, dt);
+                                times.Add(dt);
+                            }
+                            catch (FormatException e)
+                            {
+                                _logger.LogWarning(e,"convert time related tag to datetime failed, {tagName}={tagValue} @{dir}", tag.TagName, tag.TagDescription, tag.TagDescription);
+                            }
+                        }
+                        if (times.Any(i=>i.Year==DateTime.Now.Year&&i.Month==DateTime.Now.Month&&i.Day==DateTime.Now.Day))
+                        {
+                            captures.Add(new HistoryCapture
+                            {
+                                AbsolutePath = f,
+                                CaptureTime = times.First(),
+                                FileBaseName = Path.GetFileName(f),
+                                FileExtension = Path.GetExtension(f)
+                            });   
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        if (e is IOException && e.Message.Contains(" Access to the cloud file is denied"))
+                        {
+                            _logger.LogWarning(e, "access to {f} failed",f);
+                        }
                     }
                 }
             }
-            throw new NotImplementedException();
+            return captures;
         }
     }
 }
