@@ -11,6 +11,12 @@ using Newtonsoft.Json;
 namespace LrWallPaper.Services
 {
 
+    public record DateTimeTag
+    {
+        public string TagName { get; set; }
+        public string TagDescription { get; set; }
+        public string TagDirectory { get; set; }
+    }
     public record DateTimeParsePattern
     {
         public string Format { get; set; }
@@ -28,7 +34,7 @@ namespace LrWallPaper.Services
 
         private bool IsPicture(string fileName)
         {
-            _logger.LogInformation("check file {fileName} is picture by name", fileName);
+            _logger.LogDebug("check file {fileName} is picture by name", fileName);
             return !Path.GetFileName(fileName).StartsWith('.') && ImageSuffixes.PossibleSuffixes.Contains(Path.GetExtension(fileName).ToLower());
         }
 
@@ -66,7 +72,7 @@ namespace LrWallPaper.Services
                     try
                     {
                         var imageMetaDirectories = ImageMetadataReader.ReadMetadata(f);
-                        var rawTimeTags = new List<Tuple<string,string>>();
+                        var rawTimeTags = new List<DateTimeTag>();
                         foreach (var info in imageMetaDirectories)
                         {
                             // _logger.LogInformation("{f}", JsonConvert.SerializeObject(info.Tags.Select(i => i.Name), Formatting.Indented));
@@ -74,7 +80,7 @@ namespace LrWallPaper.Services
                             foreach (var tag in info.Tags)
                             {
                                 if (!tag.Name.Contains("Date/Time") && !tag.Name.Contains("Date/Time")) continue;
-                                if (!string.IsNullOrEmpty(tag.Description))rawTimeTags.Add(new Tuple<string, string>(tag.Name,tag.Description));
+                                if (!string.IsNullOrEmpty(tag.Description))rawTimeTags.Add(new DateTimeTag{TagName = tag.Name,TagDescription = tag.Description, TagDirectory = info.Name});
                             }
                         }
                         if (!rawTimeTags.Any()) continue;
@@ -83,15 +89,15 @@ namespace LrWallPaper.Services
                         {
                             try
                             {
-                                _logger.LogInformation("found new picture time prop: {f}, {tagName}={tagValue}", f, tag.Item1, tag.Item2);
-                                var dt = ParseDateTime(tag.Item2);;
+                                _logger.LogInformation("found new picture time prop: {f}, {tagName}={tagValue}  @ {dir}", f, tag.TagName, tag.TagDescription, tag.TagDirectory);
+                                var dt = ParseDateTime(tag.TagDescription);;
                                 if (times.Contains(dt)) continue;
-                                _logger.LogInformation("found new picture time prop: {f}, {tagName}={tagValue}", f, tag.Item1, dt);
+                                _logger.LogInformation("found new picture time prop: {f}, {tagName}={tagValue}", f, tag.TagName, dt);
                                 times.Add(dt);
                             }
                             catch (FormatException e)
                             {
-                                _logger.LogWarning(e,"convert time related tag to datetime failed, {tagName}={tagValue}", tag.Item1, tag.Item2);
+                                _logger.LogWarning(e,"convert time related tag to datetime failed, {tagName}={tagValue} @{dir}", tag.TagName, tag.TagDescription, tag.TagDescription);
                             }
                         }
                         if (!times.Any()) continue;
