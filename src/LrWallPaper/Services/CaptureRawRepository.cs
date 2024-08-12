@@ -68,7 +68,7 @@ namespace LrWallPaper.Services
                 // var files = FileHelper.GetFilesRecursively(dir, ["扫描文件", "庐山", "Lightroom Catalog.lrcat-data"]);
                 var files = Directory.GetFiles(dir, "*.*", new EnumerationOptions
                 {
-                    MaxRecursionDepth = 2,
+                    MaxRecursionDepth = 1,
                     IgnoreInaccessible = true,
                     RecurseSubdirectories = true
                 });
