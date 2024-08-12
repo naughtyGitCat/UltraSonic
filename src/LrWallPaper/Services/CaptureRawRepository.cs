@@ -1,6 +1,8 @@
-﻿using MetadataExtractor;
+﻿using System.Globalization;
+using MetadataExtractor;
 using Microsoft.Extensions.Logging;
 using System.Linq;
+using System.Text.RegularExpressions;
 using LrWallPaper.Common;
 using LrWallPaper.Helpers;
 using Microsoft.AspNetCore.Routing.Constraints;
@@ -27,6 +29,15 @@ namespace LrWallPaper.Services
         public Task<IEnumerable<HistoryCapture>> GetRecentCapturesAsync()
         {
             return Task.FromResult(GetRecentCaptures());
+        }
+
+        private DateTime ParseDateTime(string raw)
+        {
+            if (Regex.Match(raw, "[1-9][0-9][0-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|1[0-9]|2[0-9]|3[0-1])").Success)
+            {
+                return DateTime.Parse(raw, new DateTimeFormatInfo{FullDateTimePattern = "yyyy-MM-dd HH:mm:SS"});
+            }
+            throw new NotImplementedException($"string format {raw} not predefined");
         }
 
         private IEnumerable<HistoryCapture> GetRecentCaptures()
@@ -58,7 +69,7 @@ namespace LrWallPaper.Services
                         try
                         {
                             _logger.LogInformation("found new picture time prop: {f}, {tagName}={tagValue}", f, tag.Item1, tag.Item2);
-                            var dt = DateTime.Parse(tag.Item2);;
+                            var dt = ParseDateTime(tag.Item2);;
                             if (times.Contains(dt)) continue;
                             _logger.LogInformation("found new picture time prop: {f}, {tagName}={tagValue}", f, tag.Item1, dt);
                             times.Add(dt);
