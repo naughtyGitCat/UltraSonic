@@ -45,7 +45,7 @@ namespace LrWallPaper.Services
             {
                 var files = Directory.GetFiles(dir, "*.*", new EnumerationOptions
                 {
-                    MaxRecursionDepth = 1,
+                   // MaxRecursionDepth = 888,
                     IgnoreInaccessible = true,
                     RecurseSubdirectories = true
                 });
