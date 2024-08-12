@@ -28,8 +28,8 @@
         
         public static IEnumerable<string> GetFilesRecursively(string directory, string[] ignorePathPatterns)
         {
-            if (ignorePathPatterns.Any(directory.Contains)) return Array.Empty<string>();
             IEnumerable<string> allFiles = Array.Empty<string>();
+            if (ignorePathPatterns.Any(directory.Contains)) return allFiles;
             try
             {
                 var files = Directory.GetFiles(directory, "*.*");
