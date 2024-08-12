@@ -29,7 +29,7 @@ namespace LrWallPaper.Services
         public IEnumerable<HistoryCapture> GetRecentCaptures(TimeSpan offset)
         {
             var allCaptures = GetAllCaptures();
-            return allCaptures.Where(c => c.ExifDigest.PhotoDateTime >= DateTime.Now - offset);
+            return allCaptures.Where(c => c.ExifDigest.PhotoDateTime >= DateTime.Now - offset).OrderByDescending (c=>c.ExifDigest.PhotoDateTime);
         }
 
         public async Task<IEnumerable<HistoryCapture>> GetRecentCapturesAsync(TimeSpan offset)
