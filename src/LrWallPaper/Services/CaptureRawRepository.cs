@@ -10,6 +10,12 @@ using Newtonsoft.Json;
 
 namespace LrWallPaper.Services
 {
+
+    public record DateTimeParsePattern
+    {
+        public string Format { get; set; }
+        public Regex Pattern { get; set; }
+    }
     public class CaptureRawRepository : ICaptureRepository
     {
         private readonly IEnumerable<string> _directories;
@@ -33,9 +39,16 @@ namespace LrWallPaper.Services
 
         private DateTime ParseDateTime(string raw)
         {
-            if (Regex.Match(raw, "[1-9][0-9][0-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|1[0-9]|2[0-9]|3[0-1])").Success)
+            // 2022-02-22
+            var r1 = new DateTimeParsePattern{Format = "yyyy-MM-dd", Pattern = new Regex("[1-9][0-9][0-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|1[0-9]|2[0-9]|3[0-1])")};
+            // 2022-02-22 22:22:22
+            var r2 = new DateTimeParsePattern{Format = "yyyy-MM-dd hh:MM:ss", Pattern = new Regex("[1-9][0-9][0-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|1[0-9]|2[0-9]|3[0-1])\\s[0-2][0-9]:[0-5][0-9]:[0-5][0-9]")};
+            // 2022:02:22 22:22:22
+            var r3 = new DateTimeParsePattern{Format = "yyyy:MM:dd hh:MM:ss", Pattern = new Regex("[1-9][0-9][0-9][0-9]:(0[1-9]|1[0-2]):(0[1-9]|1[0-9]|2[0-9]|3[0-1])\\s[0-2][0-9]:[0-5][0-9]:[0-5][0-9]")};
+            var patterns = new []{r1, r2, r3};
+            foreach (var pattern in patterns)
             {
-                return DateTime.Parse(raw, new DateTimeFormatInfo{FullDateTimePattern = "yyyy-MM-dd HH:mm:SS"});
+                if (pattern.Pattern.Match(raw).Success) return DateTime.ParseExact(raw, pattern.Format, DateTimeFormatInfo.InvariantInfo);
             }
             throw new NotImplementedException($"string format {raw} not predefined");
         }
