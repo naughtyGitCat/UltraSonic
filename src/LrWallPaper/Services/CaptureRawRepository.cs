@@ -26,18 +26,19 @@ namespace LrWallPaper.Services
             _logger.LogDebug("check file {fileName} is picture by name", fileName);
             return !Path.GetFileName(fileName).StartsWith('.') && ImageSuffixes.PossibleSuffixes.Contains(Path.GetExtension(fileName).ToLower());
         }
+        public IEnumerable<HistoryCapture> GetRecentCaptures(TimeSpan offset)
+        {
+            var allCaptures = GetAllCaptures();
+            return allCaptures.Where(c => c.ExifDigest.PhotoDateTime >= DateTime.Now - offset);
+        }
 
-        public Task<IEnumerable<HistoryCapture>> GetRecentCapturesAsync()
+        public async Task<IEnumerable<HistoryCapture>> GetRecentCapturesAsync(TimeSpan offset)
         {
-            return Task.FromResult(GetRecentCaptures());
+            await Task.CompletedTask;
+            return GetRecentCaptures(offset);
         }
-        
-        private IEnumerable<HistoryCapture> GetRecentCaptures()
-        {
-            throw new NotImplementedException();
-        }
-        
-        private IEnumerable<HistoryCapture> GetCaptures()
+
+        private List<HistoryCapture> GetAllCaptures()
         {
             var captures = new List<HistoryCapture>();
             foreach (var dir in _directories)
@@ -59,8 +60,7 @@ namespace LrWallPaper.Services
                             ExifDigest = EXIFHelper.GetEXIFInfo(f),
                             FileBaseName = Path.GetFileName(f),
                             FileExtension = Path.GetExtension(f)
-                        });
-                        _logger.LogDebug("file: {file}", f);
+                        }); 
                     }
                     catch (Exception e)
                     {
@@ -73,8 +73,9 @@ namespace LrWallPaper.Services
             }
             return captures;
         }
+        
 
-        public IEnumerable<HistoryCapture> GetSameDayCapturesAsync()
+        public IEnumerable<HistoryCapture> GetSameDayCaptures()
         {
             var captures = new List<HistoryCapture>();
             foreach (var dir in _directories)
@@ -113,6 +114,12 @@ namespace LrWallPaper.Services
                 }
             }
             return captures;
+        }
+
+        public async Task<IEnumerable<HistoryCapture>> GetSameDayCapturesAsync()
+        {
+            await Task.CompletedTask;
+            return GetSameDayCaptures();
         }
     }
 }

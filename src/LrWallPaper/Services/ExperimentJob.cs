@@ -12,7 +12,7 @@ namespace LrWallPaper.Services
         }
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            var x = _captureRepository.GetSameDayCapturesAsync();
+            var x = _captureRepository.GetRecentCaptures(new TimeSpan(7,0,0,0));
             await Task.CompletedTask;
             _logger.LogInformation("{x}",JsonConvert.SerializeObject(x, Formatting.Indented));
         }
