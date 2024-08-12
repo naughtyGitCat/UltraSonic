@@ -7,6 +7,7 @@ using LrWallPaper.Common;
 using LrWallPaper.Helpers;
 using Microsoft.AspNetCore.Routing.Constraints;
 using Newtonsoft.Json;
+using Directory=System.IO.Directory;
 
 namespace LrWallPaper.Services
 {
@@ -64,7 +65,12 @@ namespace LrWallPaper.Services
             var captures = new List<HistoryCapture>();
             foreach (var dir in _directories)
             {
-                var files = FileHelper.GetFilesRecursively(dir, ["扫描文件", "庐山", "Lightroom Catalog.lrcat-data"]);
+                // var files = FileHelper.GetFilesRecursively(dir, ["扫描文件", "庐山", "Lightroom Catalog.lrcat-data"]);
+                var files = Directory.GetFiles(dir, "*.*", new EnumerationOptions
+                {
+                    IgnoreInaccessible = true,
+                    RecurseSubdirectories = true
+                });
                 foreach (var f in files)
                 {
                     _logger.LogDebug("{f}",f);
