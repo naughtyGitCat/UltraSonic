@@ -125,7 +125,6 @@ namespace LrWallPaper.Services
                         }
                     }
                 }
-                break;
             }
             return captures;
         }
