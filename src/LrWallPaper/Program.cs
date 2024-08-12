@@ -10,7 +10,7 @@ class Program
 {
     static void Main(string[] args)
     {
-        const string logTemplate = "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz}[{level:u3}][{SourceContext}]{message:lj}";
+        const string logTemplate = "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz}[{Level:u3}][{SourceContext}]{Message:lj}{NewLine}{Exception}";
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Debug()
             .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
