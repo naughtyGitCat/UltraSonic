@@ -58,7 +58,7 @@ namespace LrWallPaper.Services
             var captures = new List<HistoryCapture>();
             foreach (var dir in _directories)
             {
-                var files = FileHelper.GetFilesRecursively(dir, ["扫描文件", "庐山"]);
+                var files = FileHelper.GetFilesRecursively(dir, ["扫描文件", "庐山", "Lightroom Catalog.lrcat-data"]);
                 foreach (var f in files)
                 {
                     _logger.LogDebug("{f}",f);
