@@ -2,7 +2,9 @@
 {
     public interface ICaptureRepository
     {
-        public Task<IEnumerable<HistoryCapture>> GetRecentCapturesAsync();
-        public IEnumerable<HistoryCapture> GetSameDayCapturesAsync();
+        public IEnumerable<HistoryCapture> GetRecentCaptures(TimeSpan offset);
+        public Task<IEnumerable<HistoryCapture>> GetRecentCapturesAsync(TimeSpan offset);
+        public IEnumerable<HistoryCapture> GetSameDayCaptures();
+        public Task<IEnumerable<HistoryCapture>> GetSameDayCapturesAsync();
     }
 }
