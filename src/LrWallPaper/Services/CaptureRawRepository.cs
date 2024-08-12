@@ -65,7 +65,7 @@ namespace LrWallPaper.Services
                         }
                         catch (FormatException e)
                         {
-                            _logger.LogWarning(e,"convert time related tag to datetime failed");
+                            _logger.LogWarning(e,"convert time related tag to datetime failed, {tagName}={tagValue}", tag.Item1, tag.Item2);
                         }
                     }
                     if (!times.Any()) continue;
