@@ -65,7 +65,7 @@ public class BusinessJob : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await _captureRepository.GetRecentCapturesAsync(new TimeSpan(7,0,0,0));
+        await _captureRepository.GetRecentCapturesAsync(new TimeSpan(10,0,0,0));
         var firstTime = true;
         var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
         _logger.LogInformation("Now set timer");
