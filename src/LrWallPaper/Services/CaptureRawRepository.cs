@@ -47,7 +47,7 @@ namespace LrWallPaper.Services
                         // _logger.LogInformation("{f}", JsonConvert.SerializeObject(info.Tags.Select(i => i.Name)));
                         foreach (var tag in info.Tags)
                         {
-                            if (!tag.Name.ToLower().Contains("date") && !tag.Name.ToLower().Contains("Date/Time")) continue;
+                            if (!tag.Name.Contains("Date/Time") && !tag.Name.Contains("Date/Time")) continue;
                             if (!string.IsNullOrEmpty(tag.Description))rawTimeTags.Add(new Tuple<string, string>(tag.Name,tag.Description));
                         }
                     }
@@ -66,7 +66,6 @@ namespace LrWallPaper.Services
                         catch (FormatException e)
                         {
                             _logger.LogWarning(e,"convert time related tag to datetime failed");
-                            break;
                         }
                     }
                     if (!times.Any()) continue;
