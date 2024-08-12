@@ -58,6 +58,7 @@ namespace LrWallPaper.Services
             IEnumerable<HistoryCapture> captures = Array.Empty<HistoryCapture>();
             foreach (var dir in _directories)
             {
+                if (dir == "iCloud Photos") continue;
                 var files = FileHelper.GetFilesRecursively(dir);
                 foreach (var f in files)
                 {
