@@ -28,7 +28,7 @@
                 CameraMaker = GetCameraMaker(exifMainDirectories!.First()),
                 CameraModel=GetCameraMode(exifMainDirectories!.First()),
                 PhotoDateTime = GetPhotoDateTime(exifMainDirectories!.First()),
-                LensModel = GetPhotoLensModel(exifMainDirectories!.First()),
+                LensModel = GetPhotoLensModel(exifSubDirectories!.First()),
                 FileSize =GetPhotoFileSize(fileDirectories!.First())
             };
 

@@ -11,5 +11,11 @@ namespace LrWallPaper.Controllers
         {
             throw new NotImplementedException();
         }
+
+        [HttpGet]
+        public object Get() 
+        {
+            return "ok";
+        }
     }
 }

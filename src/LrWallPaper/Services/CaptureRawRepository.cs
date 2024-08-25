@@ -38,7 +38,7 @@ namespace LrWallPaper.Services
             return GetRecentCaptures(offset);
         }
 
-        private List<HistoryCapture> GetAllCaptures()
+        public IEnumerable<HistoryCapture> GetAllCaptures()
         {
             var captures = new List<HistoryCapture>();
             foreach (var dir in _directories)
@@ -52,15 +52,16 @@ namespace LrWallPaper.Services
                 foreach (var f in files)
                 {
                     if (!IsPicture(f)) continue;
+                    HistoryCapture? historyCapture = null;
                     try
                     {
-                        captures.Add(new HistoryCapture
+                        historyCapture = new HistoryCapture
                         {
                             AbsolutePath = f,
                             ExifDigest = EXIFHelper.GetEXIFInfo(f),
                             FileBaseName = Path.GetFileName(f),
                             FileExtension = Path.GetExtension(f)
-                        }); 
+                        };
                     }
                     catch (Exception e)
                     {
@@ -69,9 +70,12 @@ namespace LrWallPaper.Services
                             _logger.LogWarning(e, "access to {f} failed",f);
                         }
                     }
+                    if (historyCapture is not null) 
+                    {
+                        yield return historyCapture;
+                    }
                 }
             }
-            return captures;
         }
         
 
