@@ -1,5 +1,6 @@
-﻿using Newtonsoft.Json;
-namespace LrWallPaper.Services
+﻿using LrWallPaper.Services;
+using Newtonsoft.Json;
+namespace LrWallPaper.Jobs
 {
     public class ExperimentJob : BackgroundService
     {
@@ -12,9 +13,9 @@ namespace LrWallPaper.Services
         }
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            var x = _captureRepository.GetRecentCaptures(new TimeSpan(7,0,0,0));
+            var x = _captureRepository.GetRecentCaptures(new TimeSpan(7, 0, 0, 0));
             await Task.CompletedTask;
-            _logger.LogInformation("{x}",JsonConvert.SerializeObject(x, Formatting.Indented));
+            _logger.LogInformation("{x}", JsonConvert.SerializeObject(x, Formatting.Indented));
         }
     }
 }

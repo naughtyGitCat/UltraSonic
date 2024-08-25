@@ -1,7 +1,34 @@
-﻿namespace LrWallPaper.Helpers
+﻿using System.Security.Cryptography;
+using System.Text;
+
+namespace LrWallPaper.Helpers
 {
     public static class FileHelper
     {
+        public static void MakeDir(string path)
+        {
+            
+        }
+        public static string GetMD5(string fileName)
+        {
+            //新建文件流
+            using FileStream file = new(fileName, FileMode.Open);
+            //MD5加密服务提供器
+            var md5 = MD5.Create();
+
+            //对文件进行计算MD5
+            byte[] retVal = md5.ComputeHash(file);
+
+            //保存输出结果
+            var sb = new StringBuilder();
+            //转为2进制
+            for (int i = 0; i < retVal.Length; i++)
+            {
+                sb.Append(retVal[i].ToString("x2"));
+            }
+
+            return sb.ToString();
+        }
 
         public static IEnumerable<string> GetFilesRecursively(string directory)
         {

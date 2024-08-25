@@ -5,6 +5,7 @@ using Serilog;
 using Serilog.Events;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
+using LrWallPaper.Jobs;
 namespace LrWallPaper;
 class Program
 {
@@ -23,8 +24,11 @@ class Program
         builder.Services.AddSingleton<ISQLiteFactory, SQLiteFactory>();
         // builder.Services.AddHostedService<BusinessJob>();
         builder.Services.AddSingleton<ICaptureRepository, CaptureRawRepository>();
-
-        builder.Services.AddHostedService<ExperimentJob>();
+        builder.Services.AddSingleton<FileMD5Manager>();
+        // builder.Services.AddHostedService<ExperimentJob>();
+        // builder.Services.AddHostedService<SyncRemovableJob>();
+        builder.Services.AddHostedService<SyncAppleJob>();
+       //  builder.Services.AddHostedService<PictureMD5Job>();
         builder.Services.AddControllers();
         // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
         builder.Services.AddEndpointsApiExplorer();
