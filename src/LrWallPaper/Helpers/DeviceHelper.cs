@@ -3,7 +3,11 @@ namespace LrWallPaper.Helpers
 {
     public record DeviceFingerprint
     {
-        public string Name { set; get; }
+        public string DeviceName { set; get; }
+        public string DeviceSerial { get; set; }
+        public string OSVersion { get; set; }
+        public string ProductType { get; set; }
+        public string ProductFriendlyName { get; set; }
     }
     
     public interface IDeviceHelper
