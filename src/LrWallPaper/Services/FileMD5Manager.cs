@@ -125,6 +125,19 @@ namespace LrWallPaper.Services
             return await _database.FetchAsync<FileMD5Entity>(sql);
         }
 
+        public async Task<List<FileMD5Entity>> GetFileMD5EntityAsync(string filename)
+        {
+            var sql = $"""
+                SELECT
+                    *
+                FROM
+                    file_info
+                WHERE
+                    filename='{filename}'
+                """;
+            return await _database.FetchAsync<FileMD5Entity>(sql);
+        }
+
         public async Task DeleteFileMD5Async(string filepath, string filename) 
         {
             var sql = $"""
