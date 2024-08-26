@@ -7,6 +7,7 @@ using Xunit;
 using Xunit.Abstractions;
 using Netimobiledevice.Usbmuxd;
 using Newtonsoft.Json;
+using System.Net;
 namespace LrWallPaper.Tests;
 
 public class TestNetimobiledevice
@@ -37,6 +38,13 @@ public class TestNetimobiledevice
         // OsVersion: 17.3
         // ProductType: iPhone15,2
         // ProductFriendlyName: iPhone 14 Pro
+
+        // There's 1 devices connected
+        // Device found: 6 - 000O0O00000O000O0000O00O
+        // DeviceName: cookµÄ iPhone
+        // OsVersion: 12.5.7
+        // ProductType: iPhone7,2
+        // ProductFriendlyName: iPhone 6
     }
 
     [Fact]
