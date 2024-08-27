@@ -49,7 +49,7 @@ namespace LrWallPaper.Jobs
             {
                 foreach (var device in GetCurrentAppleDevices()) 
                 {
-                    using var lockdownClient = MobileDevice.CreateUsingUsbmux(device.DeviceId);
+                    using var lockdownClient = MobileDevice.CreateUsingUsbmux(device.DeviceId!);
                     using var afc = new AfcService(lockdownClient);
                     var iosProductName = lockdownClient.ProductFriendlyName;
                     var directories = afc.GetDirectoryList();
@@ -66,9 +66,10 @@ namespace LrWallPaper.Jobs
                             _logger.LogDebug("file {cf} already exist", file);
                             continue;
                         }
+                        var tmpFile = @$"F:\{filename}";
                         try
                         {
-                            var tmpFile = @$"F:\{filename}";
+                            _logger.LogDebug("now pull file {i} from ios to tmp file {t}", file, tmpFile);
                             afc.Pull(file, tmpFile);
                             var tmpExif = EXIFHelper.GetEXIFInfo(@$"F:\{filename}");
                             if (tmpExif.CameraMaker == "Apple" && tmpExif.CameraModel == iosProductName)
@@ -77,9 +78,20 @@ namespace LrWallPaper.Jobs
                                 if (tmpExif.PhotoDateTime is null) continue;
                                 var targetFile = Path.Join(@"D:\Photograph", tmpExif.PhotoDateTime.Value.Year.ToString(), $"{tmpExif.PhotoDateTime}:yyyy-MM-dd", filename);
                                 Directory.Move(tmpFile, targetFile);
-                                // calc target file exif and md5 save to db
+                                var targetExif = EXIFHelper.GetEXIFInfo(targetFile);
+                                var targetMD5 =FileHelper.GetMD5(targetFile);
+                                await _fileRecordManager.SaveFileMD5Async(new FileMD5Entity
+                                {
+                                    FilePath = Path.GetDirectoryName(targetFile),
+                                    FileName = Path.GetFileName(targetFile),
+                                    CameraMaker = tmpExif.CameraMaker,
+                                    CameraModel = iosProductName,
+                                    LensModel = tmpExif.LensModel??"",
+                                    FileSize = tmpExif.FileSize??0,
+                                    FileMD5 = targetMD5,
+                                    CaptureTime=tmpExif.PhotoDateTime??DateTime.MinValue
+                                });
                             }
-                            Directory.Delete(tmpFile, true);
                         }
                         catch (Exception e)
                         {
@@ -87,7 +99,11 @@ namespace LrWallPaper.Jobs
                         }
                         finally
                         {
-                            // remove tmp file
+                            _logger.LogDebug("try to remove tmp file {t}", tmpFile);
+                            if (Directory.Exists(tmpFile))
+                            {
+                                Directory.Delete(tmpFile, true);
+                            }
                         }
                         
                     }

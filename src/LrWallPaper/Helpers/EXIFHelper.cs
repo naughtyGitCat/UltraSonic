@@ -13,6 +13,27 @@
     }
     public static class EXIFHelper
     {
+        public static EXIFDigest GetEXIFInfoExplict(string file)
+        {
+            var directories = MetadataExtractor.ImageMetadataReader.ReadMetadata(file);
+            var exifMainDirectories = directories.Where(i => i.Name == "Exif IFD0");
+            var exifSubDirectories = directories.Where(i => i.Name == "Exif SubIFD");
+            var fileDirectories = directories.Where(i => i.Name == "File");
+
+            if (exifMainDirectories is null||!exifMainDirectories.Any()) throw new Exception($"{file} has no Exif IFD0 Info");
+            if (exifSubDirectories is null||!exifSubDirectories.Any()) throw new Exception($"{file} has no Exif SubIFD Info");
+            if (fileDirectories is null||!fileDirectories.Any()) throw new Exception($"{file} has no Exif File Info");
+            var d = new EXIFDigest
+            {
+                CameraMaker =  GetCameraMaker(exifMainDirectories!.First()),
+                CameraModel =  GetCameraMode(exifMainDirectories!.First()) ,
+                PhotoDateTime =  GetPhotoDateTime(exifMainDirectories!.First()),
+                LensModel =  GetPhotoLensModel(exifSubDirectories!.First()) ,
+                FileSize = GetPhotoFileSize(fileDirectories!.First())
+            };
+
+            return d;
+        }
         public static EXIFDigest GetEXIFInfo(string file)
         {
             var directories = MetadataExtractor.ImageMetadataReader.ReadMetadata(file);
@@ -20,16 +41,13 @@
             var exifSubDirectories = directories.Where(i => i.Name == "Exif SubIFD");
             var fileDirectories = directories.Where(i => i.Name == "File");
             
-            if (exifMainDirectories is null) throw new Exception($"{file} has no Exif IFD0 Info");
-            if (exifSubDirectories is null) throw new Exception($"{file} has no Exif SubIFD Info");
-            if (fileDirectories is null) throw new Exception($"{file} has no Exif File Info");
             var d = new EXIFDigest 
             {
-                CameraMaker = GetCameraMaker(exifMainDirectories!.First()),
-                CameraModel=GetCameraMode(exifMainDirectories!.First()),
-                PhotoDateTime = GetPhotoDateTime(exifMainDirectories!.First()),
-                LensModel = GetPhotoLensModel(exifSubDirectories!.First()),
-                FileSize =GetPhotoFileSize(fileDirectories!.First())
+                CameraMaker = exifMainDirectories.Any()? GetCameraMaker(exifMainDirectories!.First()) : null,
+                CameraModel= exifMainDirectories.Any() ? GetCameraMode(exifMainDirectories!.First()):null,
+                PhotoDateTime = exifMainDirectories.Any()?GetPhotoDateTime(exifMainDirectories!.First()):null,
+                LensModel = exifSubDirectories.Any()?GetPhotoLensModel(exifSubDirectories!.First()):null,
+                FileSize = fileDirectories.Any()?GetPhotoFileSize(fileDirectories!.First()):null
             };
 
             return d;
