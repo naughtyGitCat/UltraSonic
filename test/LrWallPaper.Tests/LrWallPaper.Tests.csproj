@@ -55,6 +55,12 @@
 		<None Update="Asserts\IMG_9422.Canon.Rebel.SL1.CR2">
 		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
+		<None Update="Asserts\IMG_0008.Twitter.JPG">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Asserts\IMG_0147.Twitter.PNG">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
 		<None Update="Asserts\[000016].Recovered.jpg">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>

@@ -1,7 +1,18 @@
 using System;
+using System.ComponentModel;
 using System.Linq;
+
+using XmpCore.Impl;
+using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using Xunit;
 using Xunit.Abstractions;
+
+using static LrWallPaper.Helpers.WallpaperHelper;
+
+using static MetadataExtractor.Formats.Bmp.BmpHeaderDirectory;
+
+using static System.Runtime.InteropServices.JavaScript.JSType;
 namespace LrWallPaper.Tests
 {
     public class TestEXIFInfo
@@ -156,6 +167,81 @@ namespace LrWallPaper.Tests
             // Assert.NotEmpty(gpsDirectories.Where(i => i.Tags.Where(t => t.Name == "GPS Altitude Ref" && t.Description == "Sea level").Any()));
             // Assert.NotEmpty(gpsDirectories.Where(i => i.Tags.Where(t => t.Name == "GPS Latitude Ref" && t.Description == "N").Any()));
             // Assert.NotEmpty(gpsDirectories.Where(i => i.Tags.Where(t => t.Name == "GPS Longitude Ref" && t.Description == "E").Any()));
+        }
+        [Fact]
+        public void TestTwitterJPG()
+        {
+            var file = "Asserts/IMG_0008.Twitter.JPG";
+            var directories = MetadataExtractor.ImageMetadataReader.ReadMetadata(file);
+            foreach (var directory in directories)
+                foreach (var tag in directory.Tags)
+                   _logger.WriteLine($"{directory.Name} - {tag.Name} = {tag.Description}");
+            /*              JPEG - Compression Type = Progressive, Huffman
+                            JPEG - Data Precision = 8 bits
+                            JPEG - Image Height = 2048 pixels
+                            JPEG - Image Width = 1365 pixels
+                            JPEG - Number of Components = 3
+                            JPEG - Component 1 = Y component: Quantization table 0, Sampling factors 2 horiz / 2 vert
+                            JPEG - Component 2 = Cb component: Quantization table 1, Sampling factors 1 horiz / 1 vert
+                            JPEG - Component 3 = Cr component: Quantization table 1, Sampling factors 1 horiz / 1 vert
+                            JFIF - Version = 1.1
+                            JFIF - Resolution Units = none
+                            JFIF - X Resolution = 72 dots
+                            JFIF - Y Resolution = 72 dots
+                            JFIF - Thumbnail Width Pixels = 0
+                            JFIF - Thumbnail Height Pixels = 0
+                            Exif IFD0 -X Resolution = 72 dots per inch
+                            Exif IFD0 - Y Resolution = 72 dots per inch
+                            Exif IFD0 - Resolution Unit = Inch
+                            Exif IFD0 -YCbCr Positioning = Center of pixel array
+                            Exif SubIFD - Exif Version = 2.21
+                            Exif SubIFD -Components Configuration = YCbCr
+                            Exif SubIFD -FlashPix Version = 1.00
+                            Exif SubIFD -Color Space = sRGB
+                            Exif SubIFD -Exif Image Width = 1365 pixels
+                            Exif SubIFD - Exif Image Height = 2048 pixels
+                            Exif SubIFD - Scene Capture Type = Standard
+                            Exif Thumbnail -Compression = JPEG(old - style)
+                            Exif Thumbnail -X Resolution = 72 dots per inch
+                            Exif Thumbnail - Y Resolution = 72 dots per inch
+                            Exif Thumbnail - Resolution Unit = Inch
+                            Exif Thumbnail -Thumbnail Offset = 280 bytes
+                            Exif Thumbnail - Thumbnail Length = 13097 bytes
+                            Huffman - Number of Tables = 2 Huffman tables
+                            File Type -Detected File Type Name = JPEG
+                            File Type -Detected File Type Long Name = Joint Photographic Experts Group
+                            File Type - Detected MIME Type = image / jpeg
+                            File Type -Expected File Name Extension = jpg
+                            File - File Name = IMG_0008.Twitter.JPG
+                            File - File Size = 914657 bytes
+                            File - File Modified Date = 周二 8月 27 22:08:54 + 08:00 2024*/
+        }
+
+        [Fact]
+        public void TestTwitterPNG()
+        {
+            var file = "Asserts/IMG_0147.Twitter.PNG";
+            var directories = MetadataExtractor.ImageMetadataReader.ReadMetadata(file);
+            foreach (var directory in directories)
+                foreach (var tag in directory.Tags)
+                    _logger.WriteLine($"{directory.Name} - {tag.Name} = {tag.Description}");
+            /*
+            PNG-IHDR - Image Width = 1287
+            PNG-IHDR - Image Height = 1800
+            PNG-IHDR - Bits Per Sample = 8
+            PNG-IHDR - Color Type = Indexed Color
+            PNG-IHDR - Compression Type = Deflate
+            PNG-IHDR - Filter Method = Adaptive
+            PNG-IHDR - Interlace Method = No Interlace
+            PNG-PLTE - Palette Size = 128
+            File Type - Detected File Type Name = PNG
+            File Type - Detected File Type Long Name = Portable Network Graphics
+            File Type - Detected MIME Type = image/png
+            File Type - Expected File Name Extension = png
+            File - File Name = IMG_0147.Twitter.PNG
+            File - File Size = 373805 bytes
+            File - File Modified Date = 周二 8月 27 22:09:01 +08:00 2024
+             */
         }
 
         [Fact]
