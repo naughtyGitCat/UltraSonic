@@ -5,3 +5,5 @@ logs/
 .claudiaideconfig
 .vscode/
 .idea/
+.db
+src/LrWallPaper/ultrasonic.db
