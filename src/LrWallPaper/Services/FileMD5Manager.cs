@@ -1,6 +1,8 @@
 ﻿using NPoco;
-using Microsoft.Data.Sqlite;
+using System.Data.SQLite;
 using System.Security.Cryptography;
+using System.Data.Common;
+using Newtonsoft.Json;
 namespace LrWallPaper.Services
 {
     [TableName("file_info")]
@@ -38,9 +40,11 @@ namespace LrWallPaper.Services
     public class FileMD5Manager
     {
         private readonly IDatabase _database;
-        public FileMD5Manager() 
+        private readonly ILogger<FileMD5Manager> _logger;   
+        public FileMD5Manager(ILogger<FileMD5Manager> logger) 
         {
-            _database = new Database(@"Data Source=ultrasonic.db", DatabaseType.SQLite, SqliteFactory.Instance);
+            _logger = logger;
+            _database = new Database(@"Data Source=ultrasonic.db", DatabaseType.SQLite, SQLiteFactory.Instance);
             PrepareTable();
         }
 
@@ -61,7 +65,8 @@ namespace LrWallPaper.Services
                   create_time DATETIME NOT NULL,
                   update_time DATETIME NOT NULL,
                   UNIQUE (fullpath),
-                  UNIQUE (filepath, filename)
+                  UNIQUE (filepath, filename),
+                  UNIQUE (filename, file_md5)
                 );
                 """;
             _database.Execute( sql );
@@ -73,8 +78,55 @@ namespace LrWallPaper.Services
                 INSERT OR REPLACE INTO 
                 file_info (fullpath,filepath,filename,camera_maker,camera_model,lens_model,file_size,file_md5,capture_time,create_time,update_time)
                 VALUES ('{file.FileFullPath}', '{file.FilePath}', '{file.FileName}','{file.CameraMaker}', '{file.CameraModel}', '{file.LensModel}','{file.FileSize}', '{file.FileMD5}','{file.CaptureTime:yyyy-MM-dd HH:mm:ss}', '{DateTime.Now:yyyy-MM-dd HH:mm:ss}',  '{DateTime.Now:yyyy-MM-dd HH:mm:ss}')
+
                 """;
-            await _database.ExecuteAsync(sql);
+            _logger.LogInformation(file.ToString());
+            _logger.LogInformation( sql );
+            var pSQL = """
+                               INSERT OR REPLACE INTO 
+                                file_info 
+                                (fullpath,filepath,filename,camera_maker,camera_model,lens_model,file_size,file_md5,capture_time,create_time,update_time)
+                                VALUES 
+                                (
+                                    @fullpath, 
+                                    @filepath, 
+                                    @filename,
+                                    @camera_maker, 
+                                    @camera_model, 
+                                    @lens_model,
+                                    @file_size, 
+                                    @file_md5,
+                                    @capture_time, 
+                                    @create_time,  
+                                    @update_time
+                                )
+                """;
+            /*   using var conn = _database.Connection;
+               conn.Open();
+               if (conn is null)
+               {
+                   throw new Exception("conn is null");
+               }*/
+            using var conn = new SQLiteConnection(@"Data Source=ultrasonic.db");
+             conn.Open();
+            // var cmd = _database.CreateCommand(conn, commandType: System.Data.CommandType.Text, pSQL);
+            var cmd = conn.CreateCommand();
+            cmd.CommandText = pSQL;
+            cmd.Parameters.Add(new SQLiteParameter("@fullpath", file.FileFullPath));
+            cmd.Parameters.Add(new SQLiteParameter("@filepath", file.FilePath));
+            cmd.Parameters.Add(new SQLiteParameter("@filename", file.FileName));
+            cmd.Parameters.Add(new SQLiteParameter("@camera_maker", file.CameraMaker));
+            cmd.Parameters.Add(new SQLiteParameter("@camera_model", file.CameraModel));
+            cmd.Parameters.Add(new SQLiteParameter("@lens_model", file.LensModel));
+            cmd.Parameters.Add(new SQLiteParameter("@file_size", file.FileSize==0?(object)0:file.FileSize));
+            cmd.Parameters.Add(new SQLiteParameter("@file_md5", file.FileMD5));
+            cmd.Parameters.Add(new SQLiteParameter("@capture_time", $"{file.CaptureTime:yyyy-MM-dd HH:mm:ss}"));
+            cmd.Parameters.Add(new SQLiteParameter("@create_time", $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}"));
+            cmd.Parameters.Add(new SQLiteParameter("@update_time", $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}"));
+
+            cmd.VerifyOnly();
+            await cmd.ExecuteNonQueryAsync();
+            // await _database.ExecuteAsync(MySqlConnector.MySqlHelper.EscapeString(sql));
         }
 
         public async Task SaveFileMD5Async(string filepath,  string filename, string md5)
@@ -82,7 +134,7 @@ namespace LrWallPaper.Services
             var sql = $"""
                 INSERT OR REPLACE INTO 
                 file_info (fullpath,filepath,filename,md5,create_time,update_time)
-                VALUES ('{Path.Join(filepath, filename)}', '{filepath}', '{filename}', '{md5}', '{DateTime.Now:yyyy-MM-dd HH:mm:ss}',  '{DateTime.Now:yyyy-MM-dd HH:mm:ss}')
+                VALUES ('{Path.Join(filepath, filename)}', '{filepath}', '{filename.Replace("@", "@@")}', '{md5}', '{DateTime.Now:yyyy-MM-dd HH:mm:ss}',  '{DateTime.Now:yyyy-MM-dd HH:mm:ss}')
                 """;
             await _database.ExecuteAsync(sql);
         }
@@ -94,7 +146,7 @@ namespace LrWallPaper.Services
             var sql = $"""
                 INSERT OR REPLACE INTO 
                 file_info (fullpath,filepath,filename,md5,create_time,update_time)
-                VALUES ('{Path.Join(filepath, filename)}', '{filepath}', '{filename}', '{md5}', '{DateTime.Now:yyyy-MM-dd HH:mm:ss}',  '{DateTime.Now:yyyy-MM-dd HH:mm:ss}')
+                VALUES ('{Path.Join(filepath, filename)}', '{filepath}', '{filename.Replace("@", "@@")}', '{md5}', '{DateTime.Now:yyyy-MM-dd HH:mm:ss}',  '{DateTime.Now:yyyy-MM-dd HH:mm:ss}')
                 """;
             await _database.ExecuteAsync(sql);
         }
@@ -107,7 +159,7 @@ namespace LrWallPaper.Services
                 FROM
                     file_info
                 WHERE
-                    fullpath='{Path.Join(filepath, filename)}'
+                    fullpath='{Path.Join(filepath, filename.Replace("@", "@@"))}'
                 """;
             return (await _database.FetchAsync<string>(sql)).First();
         }
@@ -120,7 +172,7 @@ namespace LrWallPaper.Services
                 FROM
                     file_info
                 WHERE
-                    fullpath='{Path.Join(filepath, filename)}'
+                    fullpath='{Path.Join(filepath, filename.Replace("@", "@@"))}'
                 """;
             return await _database.FetchAsync<FileMD5Entity>(sql);
         }
@@ -133,9 +185,10 @@ namespace LrWallPaper.Services
                 FROM
                     file_info
                 WHERE
-                    filename='{filename}'
+                    filename=@0
                 """;
-            return await _database.FetchAsync<FileMD5Entity>(sql);
+            
+            return await _database.FetchAsync<FileMD5Entity>(sql, filename);
         }
 
         public async Task DeleteFileMD5Async(string filepath, string filename) 
@@ -144,7 +197,7 @@ namespace LrWallPaper.Services
                 DELETE FROM
                     file_info
                 WHERE
-                    fullpath='{Path.Join(filepath, filename)}'
+                    fullpath='{Path.Join(filepath, filename.Replace("@", "@@"))}'
                 """;
             await _database.ExecuteAsync(sql);
         }

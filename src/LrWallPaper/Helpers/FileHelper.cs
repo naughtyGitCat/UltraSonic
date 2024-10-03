@@ -5,9 +5,21 @@ namespace LrWallPaper.Helpers
 {
     public static class FileHelper
     {
-        public static void MakeDir(string path)
+        public static void MoveFile(string source, string destination)
         {
-            
+            //move if directories are on the same volume
+            if (Path.GetPathRoot(source) == Path.GetPathRoot(destination))
+            {
+                Directory.Move(source, destination);
+            }
+            else
+            {
+                if (!File.Exists(source) ||Directory.Exists(source)) throw new NotFiniteNumberException("not implement for dir type source");
+                if (!File.Exists(destination) || Directory.Exists(destination)) throw new NotFiniteNumberException("not implement for dir type destination");
+                // https://stackoverflow.com/questions/58744/copy-the-entire-contents-of-a-directory-in-c-sharp
+                // CopyFilesRecursively(source, destination);
+                Directory.Delete(source, true);
+            }
         }
         public static string GetMD5(string fileName)
         {

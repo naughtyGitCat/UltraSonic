@@ -13,6 +13,7 @@ using static LrWallPaper.Helpers.WallpaperHelper;
 using static MetadataExtractor.Formats.Bmp.BmpHeaderDirectory;
 
 using static System.Runtime.InteropServices.JavaScript.JSType;
+using LrWallPaper.Helpers;
 namespace LrWallPaper.Tests
 {
     public class TestEXIFInfo
@@ -252,6 +253,52 @@ namespace LrWallPaper.Tests
             foreach (var directory in directories)
                 foreach (var tag in directory.Tags)
                    _logger.WriteLine($"{directory.Name} - {tag.Name} = {tag.Description}");
+        }
+
+        [Fact]
+        public void TestAppleLivePhoto()
+        {
+            var file = "Asserts/AppleLivePhoto.mov";
+            var directories = MetadataExtractor.ImageMetadataReader.ReadMetadata(file);
+            var quicktimeMetaDirectories = directories.Where(i => i.Name == "QuickTime Metadata Header");
+            Assert.NotEmpty(quicktimeMetaDirectories.Where(i => i.Tags.Where(t => t.Name == "Content Identifier").Any()));
+            // Assert.NotEmpty(quicktimeMetaDirectories.Where(i => i.Tags.Where(t => t.Name == "GPS Location").Any()));
+            Assert.NotEmpty(quicktimeMetaDirectories.Where(i => i.Tags.Where(t => t.Name == "Model").Any()));
+            Assert.NotEmpty(quicktimeMetaDirectories.Where(i => i.Tags.Where(t => t.Name == "Software").Any()));
+
+            var liveExif = AppleLivePhotoHelper.GetLiveQuickTimeInfo(file);
+            _logger.WriteLine($"LivePhoto: {liveExif}");
+
+            var fileTypeDirectory = directories.Where(i => i.Name == "File Type").First();
+            var fileChecked = false;
+            foreach (var tag in fileTypeDirectory.Tags)
+            {
+                if (tag.Name== "Detected MIME Type"&&tag.Description== "video/quicktime")
+                {
+                    fileChecked=true; break;
+                }
+            }
+            Assert.True(fileChecked);
+            
+
+            foreach (var directory in directories)
+                foreach (var tag in directory.Tags)
+                    _logger.WriteLine($"{directory.Name} - {tag.Name} = {tag.Description}");
+            /*
+             QuickTime Metadata Header - Content Identifier = EE6D649E-788F-4E3A-BCD2-483651BF7B34
+             QuickTime Metadata Header - GPS Location = +32.4720-084.9952+073.827/
+             QuickTime Metadata Header - Make = Apple
+             QuickTime Metadata Header - Model = iPhone 14 Pro
+             QuickTime Metadata Header - Software = 17.0
+             QuickTime Metadata Header - Creation Date = 周三 8月 30 21:56:22 +08:00 2023
+             File Type - Detected File Type Name = QuickTime
+             File Type - Detected File Type Long Name = QuickTime
+             File Type - Detected MIME Type = video/quicktime
+             File Type - Expected File Name Extension = mov
+             File - File Name = AppleLivePhoto.mov
+             File - File Size = 5217930 bytes
+             File - File Modified Date = 周三 10月 02 23:51:06 +08:00 2024
+             */
         }
     }
 }

@@ -17,6 +17,7 @@ namespace LrWallPaper.Jobs
         }
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            await Task.CompletedTask;
             while (!stoppingToken.IsCancellationRequested) 
             {
                 var captures = _captureRepository.GetAllCaptures();
@@ -31,9 +32,9 @@ namespace LrWallPaper.Jobs
                         {
                             FileName = Path.GetFileName(capture.AbsolutePath!),
                             FilePath = Path.GetDirectoryName(capture.AbsolutePath!)!,
-                            CameraMaker = exif.CameraMaker!,
-                            CameraModel = exif.CameraModel!,
-                            LensModel = exif.LensModel!,
+                            CameraMaker = exif.CameraMaker??"",
+                            CameraModel = exif.CameraModel??"",
+                            LensModel = exif.LensModel??"",
                             FileMD5 = md5,
                             FileSize = exif.FileSize??-1,
                             CaptureTime=exif.PhotoDateTime??DateTime.MinValue
