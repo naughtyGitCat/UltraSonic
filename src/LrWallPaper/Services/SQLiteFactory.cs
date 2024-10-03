@@ -1,31 +1,31 @@
 //psyduck 20220409
 using System.IO;
-using Microsoft.Data.Sqlite;
+using System.Data.SQLite;
 using NPoco;
 namespace LrWallPaper.Services;
 
-public interface ISQLiteFactory
+public interface ICustomSQLiteFactory
 {
-    public SqliteConnection GetConnection();
+    public SQLiteConnection GetConnection();
     public IDatabase GetDatabase();
 }
 
-public class SQLiteFactory : ISQLiteFactory
+public class CustomSQLiteFactory : ICustomSQLiteFactory
 {
     private const string _db = @$"Data Source=D:\…„”∞\Lightroom\Lightroom Catalog-v11.lrcat;Mode=ReadOnly";
-    public SQLiteFactory()
+    public CustomSQLiteFactory()
     {
 
     }
 
-    public SqliteConnection GetConnection()
+    public SQLiteConnection GetConnection()
     {
-        return new SqliteConnection(_db);
+        return new SQLiteConnection(_db);
     }
 
     public IDatabase GetDatabase()
     {
-        return new Database(_db, DatabaseType.SQLite, SqliteFactory.Instance);
+        return new Database(_db, DatabaseType.SQLite, SQLiteFactory.Instance);
     }
 }
 
@@ -35,7 +35,7 @@ public record TempDBInfo
     public DateTime CopyTime { get; set; }
 }
 
-public class LightroomDatabaseService : ISQLiteFactory
+public class LightroomDatabaseService : ICustomSQLiteFactory
 {
     private string _tempDBPath = "";
     private IEnumerable<string> _tempPaths;
@@ -60,17 +60,17 @@ public class LightroomDatabaseService : ISQLiteFactory
         File.Delete(_tempDBPath);
     }
 
-    public SqliteConnection GetConnection()
+    public SQLiteConnection GetConnection()
     {
         //https://docs.microsoft.com/en-us/dotnet/standard/data/sqlite
         var connectionString = @$"Data Source={_tempDBPath};Mode=ReadOnly;Pooling=False";
-        return new SqliteConnection(connectionString);
+        return new SQLiteConnection(connectionString);
     }
 
     public IDatabase GetDatabase()
     {
         var connectionString = @$"Data Source={_tempDBPath};Mode=ReadOnly;Pooling=False";
-        return new Database(connectionString, DatabaseType.SQLite, SqliteFactory.Instance);
+        return new Database(connectionString, DatabaseType.SQLite, SQLiteFactory.Instance);
     }
     
     public async Task CleanJob()

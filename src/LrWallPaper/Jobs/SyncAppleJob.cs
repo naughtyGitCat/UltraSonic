@@ -6,6 +6,7 @@ using Netimobiledevice.Afc;
 using Netimobiledevice.Lockdown;
 using LrWallPaper.Helpers;
 using LrWallPaper.Services;
+using Newtonsoft.Json;
 
 namespace LrWallPaper.Jobs
 {
@@ -47,6 +48,7 @@ namespace LrWallPaper.Jobs
         {
             while (!stoppingToken.IsCancellationRequested) 
             {
+                await Task.Delay(8, stoppingToken);
                 foreach (var device in GetCurrentAppleDevices()) 
                 {
                     using var lockdownClient = MobileDevice.CreateUsingUsbmux(device.DeviceId!);
@@ -56,12 +58,12 @@ namespace LrWallPaper.Jobs
                     var files = afc.LsDirectory("DCIM", depth: 2);
                     foreach (var file in files)
                     {
-                        _logger.LogDebug("file: {f}",file);
+                        _logger.LogDebug("loop handling ios file: {f}",file);
                         if (afc.IsDir(file)) continue; 
                         var filename = Path.GetFileName(file);
                         var fileInfo = afc.GetFileInfo(file);
                         var existSameNameFiles = await _fileRecordManager.GetFileMD5EntityAsync(filename);
-                        if (existSameNameFiles.Any(esf => esf.FileSize.ToString() == fileInfo["st_size"].ToString() && esf.FileName == filename))
+                        if (existSameNameFiles.Any(esf => (Convert.ToUInt64(esf.FileSize) == fileInfo["st_size"].AsIntegerNode().Value) && (esf.FileName == filename)))
                         {
                             _logger.LogDebug("file {cf} already exist", file);
                             continue;
@@ -76,8 +78,10 @@ namespace LrWallPaper.Jobs
                             {
                                 _logger.LogInformation("this is a picture shot by this phone");
                                 if (tmpExif.PhotoDateTime is null) continue;
-                                var targetFile = Path.Join(@"D:\Photograph", tmpExif.PhotoDateTime.Value.Year.ToString(), $"{tmpExif.PhotoDateTime}:yyyy-MM-dd", filename);
-                                Directory.Move(tmpFile, targetFile);
+                                var targetFile = Path.Join(@"D:\Photograph", tmpExif.PhotoDateTime.Value.Year.ToString(), $"{tmpExif.PhotoDateTime:yyyy-MM-dd}", filename);
+                                _logger.LogDebug("tmpFile: {t}, targetFile: {g}", tmpFile, targetFile);
+                                Directory.CreateDirectory(Path.GetDirectoryName(targetFile));
+                                File.Move(tmpFile, targetFile);
                                 var targetExif = EXIFHelper.GetEXIFInfo(targetFile);
                                 var targetMD5 =FileHelper.GetMD5(targetFile);
                                 await _fileRecordManager.SaveFileMD5Async(new FileMD5Entity
@@ -100,15 +104,15 @@ namespace LrWallPaper.Jobs
                         finally
                         {
                             _logger.LogDebug("try to remove tmp file {t}", tmpFile);
-                            if (Directory.Exists(tmpFile))
+                            if (File.Exists(tmpFile))
                             {
-                                Directory.Delete(tmpFile, true);
+                                File.Delete(tmpFile);
                             }
                         }
                         
                     }
                 }
-                await Task.Delay(new TimeSpan(0, 1, 1),stoppingToken);
+                await Task.Delay(new TimeSpan(0, 5, 8),stoppingToken);
             }
         }
     }

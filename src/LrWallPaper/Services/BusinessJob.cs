@@ -14,10 +14,10 @@ public record HistoryCapture
 public class BusinessJob : BackgroundService
 {
     private readonly ILogger<BusinessJob> _logger;
-    private readonly ISQLiteFactory _sqliteFactory;
+    private readonly ICustomSQLiteFactory _sqliteFactory;
     private readonly ICaptureRepository _captureRepository;
     private IEnumerable<HistoryCapture> _historyCaptures;
-    public BusinessJob(ISQLiteFactory sQLiteFactory, ILogger<BusinessJob> logger, ICaptureRepository captureRepository)
+    public BusinessJob(ICustomSQLiteFactory sQLiteFactory, ILogger<BusinessJob> logger, ICaptureRepository captureRepository)
     {
         _sqliteFactory = sQLiteFactory;
         _logger = logger;

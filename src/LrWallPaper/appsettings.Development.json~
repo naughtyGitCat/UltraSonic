@@ -1,0 +1,12 @@
+{
+  "Databases": {
+    "Default": "",
+    "Lightroom": ""
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  }
+}
