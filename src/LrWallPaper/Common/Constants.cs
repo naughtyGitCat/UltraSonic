@@ -2,14 +2,16 @@
 {
     public static class ImageSuffixes
     {
-        public static readonly IEnumerable<string> CanonSuffixes = new[] { ".cr2", ".cr3" };
-        public static readonly IEnumerable<string> CommonSuffixes = new[] { ".jpg", ".jpeg", ".png", ".bmp", "g.if" };
-        public static readonly IEnumerable<string> SonySuffixes = new[] { ".arw", ".sr2", ".srf" };
-        public static readonly IEnumerable<string> NikonSuffixes = new[] { ".nef", ".nrw" };
-        public static readonly IEnumerable<string> FujiSuffixes = new[] { ".raf" };
-        public static readonly IEnumerable<string> PentaxSuffixes = new[] { ".pef" };
-        public static readonly IEnumerable<string> PanasonicSuffixes = new[] { ".rw2" };
-        public static readonly IEnumerable<string> OlympusSuffixes = new[] { ".orf" };
+        public static readonly IEnumerable<string> CanonSuffixes = [".cr2", ".cr3"];
+        public static readonly IEnumerable<string> CommonSuffixes = [".jpg", ".jpeg", ".png", ".bmp", ".gif", ".heic", 
+            // .mov for live photo
+            ".mov"];
+        public static readonly IEnumerable<string> SonySuffixes = [".arw", ".sr2", ".srf"];
+        public static readonly IEnumerable<string> NikonSuffixes = [".nef", ".nrw"];
+        public static readonly IEnumerable<string> FujiSuffixes = [".raf"];
+        public static readonly IEnumerable<string> PentaxSuffixes = [".pef"];
+        public static readonly IEnumerable<string> PanasonicSuffixes = [".rw2"];
+        public static readonly IEnumerable<string> OlympusSuffixes = [".orf"];
         public static readonly IEnumerable<string> PossibleSuffixes = [
             ..CanonSuffixes, 
             ..CommonSuffixes, 

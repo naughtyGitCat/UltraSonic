@@ -28,7 +28,7 @@ class Program
         // builder.Services.AddHostedService<ExperimentJob>();
         // builder.Services.AddHostedService<SyncRemovableJob>();
         builder.Services.AddHostedService<SyncAppleJob>();
-        // builder.Services.AddHostedService<PictureMD5Job>();
+        builder.Services.AddHostedService<PictureMD5Job>();
         builder.Services.AddControllers();
         // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
         builder.Services.AddEndpointsApiExplorer();

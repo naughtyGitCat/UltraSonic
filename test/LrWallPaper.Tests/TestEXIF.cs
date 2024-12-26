@@ -14,6 +14,8 @@ using static MetadataExtractor.Formats.Bmp.BmpHeaderDirectory;
 
 using static System.Runtime.InteropServices.JavaScript.JSType;
 using LrWallPaper.Helpers;
+using MetadataExtractor.Formats.QuickTime;
+using MetadataExtractor;
 namespace LrWallPaper.Tests
 {
     public class TestEXIFInfo
@@ -256,29 +258,23 @@ namespace LrWallPaper.Tests
         }
 
         [Fact]
-        public void TestAppleLivePhoto()
+        public void TestAppleLivePhoto1()
         {
-            var file = "Asserts/AppleLivePhoto.mov";
+            var file = "Asserts/IMG_8771.iPhone14Pro.mov";
             var directories = MetadataExtractor.ImageMetadataReader.ReadMetadata(file);
-            var quicktimeMetaDirectories = directories.Where(i => i.Name == "QuickTime Metadata Header");
-            Assert.NotEmpty(quicktimeMetaDirectories.Where(i => i.Tags.Where(t => t.Name == "Content Identifier").Any()));
-            // Assert.NotEmpty(quicktimeMetaDirectories.Where(i => i.Tags.Where(t => t.Name == "GPS Location").Any()));
-            Assert.NotEmpty(quicktimeMetaDirectories.Where(i => i.Tags.Where(t => t.Name == "Model").Any()));
-            Assert.NotEmpty(quicktimeMetaDirectories.Where(i => i.Tags.Where(t => t.Name == "Software").Any()));
+            var quicktimeMetaDirectories  = directories.OfType<QuickTimeMetadataHeaderDirectory>();
+            Assert.NotEmpty(quicktimeMetaDirectories);
 
             var liveExif = AppleLivePhotoHelper.GetLiveQuickTimeInfo(file);
-            _logger.WriteLine($"LivePhoto: {liveExif}");
-
-            var fileTypeDirectory = directories.Where(i => i.Name == "File Type").First();
-            var fileChecked = false;
-            foreach (var tag in fileTypeDirectory.Tags)
+            Assert.Equal(liveExif, new EXIFDigest
             {
-                if (tag.Name== "Detected MIME Type"&&tag.Description== "video/quicktime")
-                {
-                    fileChecked=true; break;
-                }
-            }
-            Assert.True(fileChecked);
+                CameraMaker = "Apple",
+                CameraModel = "iPhone 14 Pro",
+                PhotoDateTime = new DateTime(2023, 8, 30,21,56, 22),
+                LensModel = null,
+                FileSize = 5217930,
+                GPS = new GPSLocation { Latitude=32.472, Longitude = -84.9952, Altitude = 73.827 }
+            });
             
 
             foreach (var directory in directories)
@@ -298,6 +294,205 @@ namespace LrWallPaper.Tests
              File - File Name = AppleLivePhoto.mov
              File - File Size = 5217930 bytes
              File - File Modified Date = 周三 10月 02 23:51:06 +08:00 2024
+             */
+        }
+
+        [Fact]
+        public void TestAppleLivePhoto2()
+        {
+            var file = "Asserts/IMG_8772.iPhone14Pro.mov";
+            var directories = MetadataExtractor.ImageMetadataReader.ReadMetadata(file);
+            var quicktimeMetaDirectories = directories.OfType<QuickTimeMetadataHeaderDirectory>();
+            Assert.NotEmpty(quicktimeMetaDirectories);
+
+            var liveExif = AppleLivePhotoHelper.GetLiveQuickTimeInfo(file);
+            Assert.Equal(liveExif, new EXIFDigest
+            {
+                CameraMaker = "Apple",
+                CameraModel = "iPhone 14 Pro",
+                PhotoDateTime = new DateTime(2024, 10, 5, 12, 29, 49),
+                LensModel = null,
+                FileSize = 1318009,
+                GPS = new GPSLocation { Latitude = 120.1333, Longitude = 22.2452, Altitude = 40.32 }
+            });
+
+
+            foreach (var directory in directories)
+                foreach (var tag in directory.Tags)
+                    _logger.WriteLine($"{directory.Name} - {tag.Name} = {tag.Description}");
+            /*
+                QuickTime File Type - Major Brand = qt  
+                QuickTime File Type - Minor Version = 0
+                QuickTime File Type - Compatible Brands = qt
+                QuickTime Movie Header - Version = 0
+                QuickTime Movie Header - Flags = 0 0 0
+                QuickTime Movie Header - Created = 周六 10月 05 04:29:49 2024
+                QuickTime Movie Header - Modified = 周六 10月 05 04:29:51 2024
+                QuickTime Movie Header - TrackId = 600
+                QuickTime Movie Header - Duration = 00:00:02.5983333
+                QuickTime Movie Header - Preferred Rate = 1
+                QuickTime Movie Header - Preferred Volume = 1
+                QuickTime Movie Header - Matrix = [36 values]
+                QuickTime Movie Header - Preview Time = 0
+                QuickTime Movie Header - Preview Duration = 0
+                QuickTime Movie Header - Poster Time = 0
+                QuickTime Movie Header - Selection Time = 0
+                QuickTime Movie Header - Selection Duration = 0
+                QuickTime Movie Header - Current Time = 0
+                QuickTime Movie Header - Next Track Id = 6
+                QuickTime Track Header - Version = 0
+                QuickTime Track Header - Flags = 0 0 15
+                QuickTime Track Header - Created = 周六 10月 05 04:29:49 2024
+                QuickTime Track Header - Modified = 周六 10月 05 04:29:51 2024
+                QuickTime Track Header - TrackId = 1
+                QuickTime Track Header - Duration = 1559
+                QuickTime Track Header - Layer = 0
+                QuickTime Track Header - Alternate Group = 0
+                QuickTime Track Header - Volume = 0
+                QuickTime Track Header - Matrix = 0 1 0 -1 0 0 1440 0 1
+                QuickTime Track Header - Width = 1920
+                QuickTime Track Header - Height = 1440
+                QuickTime Track Header - Rotation = -90
+                QuickTime Track Header - Version = 0
+                QuickTime Track Header - Flags = 0 0 15
+                QuickTime Track Header - Created = 周六 10月 05 04:29:49 2024
+                QuickTime Track Header - Modified = 周六 10月 05 04:29:51 2024
+                QuickTime Track Header - TrackId = 2
+                QuickTime Track Header - Duration = 1559
+                QuickTime Track Header - Layer = 0
+                QuickTime Track Header - Alternate Group = 0
+                QuickTime Track Header - Volume = 1
+                QuickTime Track Header - Matrix = 1 0 0 0 1 0 0 0 1
+                QuickTime Track Header - Width = 0
+                QuickTime Track Header - Height = 0
+                QuickTime Track Header - Version = 0
+                QuickTime Track Header - Flags = 0 0 15
+                QuickTime Track Header - Created = 周六 10月 05 04:29:49 2024
+                QuickTime Track Header - Modified = 周六 10月 05 04:29:51 2024
+                QuickTime Track Header - TrackId = 3
+                QuickTime Track Header - Duration = 1559
+                QuickTime Track Header - Layer = 0
+                QuickTime Track Header - Alternate Group = 0
+                QuickTime Track Header - Volume = 0
+                QuickTime Track Header - Matrix = 1 0 0 0 1 0 0 0 1
+                QuickTime Track Header - Width = 0
+                QuickTime Track Header - Height = 0
+                QuickTime Track Header - Version = 0
+                QuickTime Track Header - Flags = 0 0 15
+                QuickTime Track Header - Created = 周六 10月 05 04:29:49 2024
+                QuickTime Track Header - Modified = 周六 10月 05 04:29:51 2024
+                QuickTime Track Header - TrackId = 4
+                QuickTime Track Header - Duration = 1559
+                QuickTime Track Header - Layer = 0
+                QuickTime Track Header - Alternate Group = 0
+                QuickTime Track Header - Volume = 0
+                QuickTime Track Header - Matrix = 1 0 0 0 1 0 0 0 1
+                QuickTime Track Header - Width = 0
+                QuickTime Track Header - Height = 0
+                QuickTime Track Header - Version = 0
+                QuickTime Track Header - Flags = 0 0 15
+                QuickTime Track Header - Created = 周六 10月 05 04:29:49 2024
+                QuickTime Track Header - Modified = 周六 10月 05 04:29:51 2024
+                QuickTime Track Header - TrackId = 5
+                QuickTime Track Header - Duration = 721
+                QuickTime Track Header - Layer = 0
+                QuickTime Track Header - Alternate Group = 0
+                QuickTime Track Header - Volume = 0
+                QuickTime Track Header - Matrix = 1 0 0 0 1 0 0 0 1
+                QuickTime Track Header - Width = 0
+                QuickTime Track Header - Height = 0
+                QuickTime Metadata Header - Content Identifier = C325CDA5-8F1E-4E71-AB8D-08A3BF2BE936
+                QuickTime Metadata Header - GPS Location = +120.1333+22.2452+040.320/
+                QuickTime Metadata Header - Make = Apple
+                QuickTime Metadata Header - Model = iPhone 14 Pro
+                QuickTime Metadata Header - Software = 18.0.1
+                QuickTime Metadata Header - Creation Date = 周六 10月 05 12:29:49 +08:00 2024
+                File Type - Detected File Type Name = QuickTime
+                File Type - Detected File Type Long Name = QuickTime
+                File Type - Detected MIME Type = video/quicktime
+                File Type - Expected File Name Extension = mov
+                File - File Name = IMG_8772.iPhone14Pro.mov
+                File - File Size = 1318009 bytes
+                File - File Modified Date = 周六 10月 05 12:29:49 +08:00 2024
+             */
+        }
+
+        [Fact]
+        public void TestAppleLivePhoto3()
+        {
+            var file = "Asserts/IMG_5780.iPhone14Pro.MOV";
+            var directories = MetadataExtractor.ImageMetadataReader.ReadMetadata(file);
+            var quicktimeMetaDirectories = directories.OfType<QuickTimeMetadataHeaderDirectory>();
+            Assert.NotEmpty(quicktimeMetaDirectories);
+
+            var liveExif = AppleLivePhotoHelper.GetLiveQuickTimeInfo(file);
+            Assert.Equal(new EXIFDigest
+            {
+                CameraMaker = null,
+                CameraModel = null,
+                PhotoDateTime = new DateTime(2024, 3, 26, 12, 13, 23),
+                LensModel = null,
+                FileSize = 3557217,
+                GPS = null
+            }, liveExif);
+
+
+            foreach (var directory in directories)
+                foreach (var tag in directory.Tags)
+                    _logger.WriteLine($"{directory.Name} - {tag.Name} = {tag.Description}");
+            /*
+                QuickTime File Type - Major Brand = qt  
+                QuickTime File Type - Minor Version = 0
+                QuickTime File Type - Compatible Brands = qt
+                QuickTime Movie Header - Version = 0
+                QuickTime Movie Header - Flags = 0 0 0
+                QuickTime Movie Header - Created = 周二 3月 26 04:13:23 2024
+                QuickTime Movie Header - Modified = 周二 3月 26 04:13:24 2024
+                QuickTime Movie Header - TrackId = 600
+                QuickTime Movie Header - Duration = 00:00:01.8666666
+                QuickTime Movie Header - Preferred Rate = 1
+                QuickTime Movie Header - Preferred Volume = 1
+                QuickTime Movie Header - Matrix = [36 values]
+                QuickTime Movie Header - Preview Time = 0
+                QuickTime Movie Header - Preview Duration = 0
+                QuickTime Movie Header - Poster Time = 0
+                QuickTime Movie Header - Selection Time = 0
+                QuickTime Movie Header - Selection Duration = 0
+                QuickTime Movie Header - Current Time = 0
+                QuickTime Movie Header - Next Track Id = 3
+                QuickTime Track Header - Version = 0
+                QuickTime Track Header - Flags = 0 0 15
+                QuickTime Track Header - Created = 周二 3月 26 04:13:23 2024
+                QuickTime Track Header - Modified = 周二 3月 26 04:13:24 2024
+                QuickTime Track Header - TrackId = 1
+                QuickTime Track Header - Duration = 1120
+                QuickTime Track Header - Layer = 0
+                QuickTime Track Header - Alternate Group = 0
+                QuickTime Track Header - Volume = 0
+                QuickTime Track Header - Matrix = 0 -1 0 1 0 0 0 1920 1
+                QuickTime Track Header - Width = 1744
+                QuickTime Track Header - Height = 1308
+                QuickTime Track Header - Rotation = 90
+                QuickTime Track Header - Version = 0
+                QuickTime Track Header - Flags = 0 0 15
+                QuickTime Track Header - Created = 周二 3月 26 04:13:23 2024
+                QuickTime Track Header - Modified = 周二 3月 26 04:13:24 2024
+                QuickTime Track Header - TrackId = 2
+                QuickTime Track Header - Duration = 40
+                QuickTime Track Header - Layer = 0
+                QuickTime Track Header - Alternate Group = 0
+                QuickTime Track Header - Volume = 0
+                QuickTime Track Header - Matrix = 1 0 0 0 1 0 0 0 1
+                QuickTime Track Header - Width = 0
+                QuickTime Track Header - Height = 0
+                QuickTime Metadata Header - Content Identifier = 334ED29E-B4D5-4E4B-9508-EA65055C3A0A
+                File Type - Detected File Type Name = QuickTime
+                File Type - Detected File Type Long Name = QuickTime
+                File Type - Detected MIME Type = video/quicktime
+                File Type - Expected File Name Extension = mov
+                File - File Name = IMG_5780.iPhone14Pro.MOV
+                File - File Size = 3557217 bytes
+                File - File Modified Date = 周一 12月 02 00:10:46 +08:00 2024
              */
         }
     }

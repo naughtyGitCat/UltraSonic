@@ -61,6 +61,13 @@ namespace LrWallPaper.Jobs
                         _logger.LogDebug("loop handling ios file: {f}",file);
                         if (afc.IsDir(file)) continue; 
                         var filename = Path.GetFileName(file);
+
+                        // DCIM seems contains .AAE file
+                        // https://fileinfo.com/extension/aae
+                        // An AAE file is a record of the edits a user has made to an image in the iOS version of Apple Photos. It is used to non-destructively transfer edits from iOS to macOS, so a user can revert their image to its original form if needed. AAE files are stored alongside the images whose edits they contain.
+                        // we ignore this delta file
+                        if (filename.ToLower().EndsWith(".aae")) continue;
+
                         var fileInfo = afc.GetFileInfo(file);
                         var existSameNameFiles = await _fileRecordManager.GetFileMD5EntityAsync(filename);
                         if (existSameNameFiles.Any(esf => (Convert.ToUInt64(esf.FileSize) == fileInfo["st_size"].AsIntegerNode().Value) && (esf.FileName == filename)))
@@ -73,7 +80,7 @@ namespace LrWallPaper.Jobs
                         {
                             _logger.LogDebug("now pull file {i} from ios to tmp file {t}", file, tmpFile);
                             afc.Pull(file, tmpFile);
-                            var tmpExif = EXIFHelper.GetEXIFInfo(@$"F:\{filename}");
+                            var tmpExif = Path.GetExtension(@$"F:\{filename}").ToLower() == ".mov" ? AppleLivePhotoHelper.GetLiveQuickTimeInfo(@$"F:\{filename}") : EXIFHelper.GetEXIFInfo(@$"F:\{filename}");
                             if (tmpExif.CameraMaker == "Apple" && tmpExif.CameraModel == iosProductName)
                             {
                                 _logger.LogInformation("this is a picture shot by this phone");
@@ -82,7 +89,6 @@ namespace LrWallPaper.Jobs
                                 _logger.LogDebug("tmpFile: {t}, targetFile: {g}", tmpFile, targetFile);
                                 Directory.CreateDirectory(Path.GetDirectoryName(targetFile));
                                 File.Move(tmpFile, targetFile);
-                                var targetExif = EXIFHelper.GetEXIFInfo(targetFile);
                                 var targetMD5 =FileHelper.GetMD5(targetFile);
                                 await _fileRecordManager.SaveFileMD5Async(new FileMD5Entity
                                 {
@@ -96,23 +102,30 @@ namespace LrWallPaper.Jobs
                                     CaptureTime=tmpExif.PhotoDateTime??DateTime.MinValue
                                 });
                             }
-                        }
-                        catch (Exception e)
-                        {
-                            _logger.LogWarning(e, "pull file {f} failed",file);
-                        }
-                        finally
-                        {
                             _logger.LogDebug("try to remove tmp file {t}", tmpFile);
                             if (File.Exists(tmpFile))
                             {
                                 File.Delete(tmpFile);
                             }
                         }
-                        
+                        catch (Exception e)
+                        {
+                            _logger.LogWarning(e, "pull file {f} failed",file);
+                            throw;
+                        }
+                        finally
+                        {
+                            // comment for debug pull file DCIM/105APPLE/IMG_5780.MOV failed
+                            //_logger.LogDebug("try to remove tmp file {t}", tmpFile);
+                            //if (File.Exists(tmpFile))
+                            //{
+                            //    File.Delete(tmpFile);
+                            //}
+                        }
+
                     }
                 }
-                await Task.Delay(new TimeSpan(0, 5, 8),stoppingToken);
+                await Task.Delay(new TimeSpan(1, 5, 8),stoppingToken);
             }
         }
     }

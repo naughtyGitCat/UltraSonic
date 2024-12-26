@@ -64,7 +64,7 @@
 		<None Update="Asserts\[000016].Recovered.jpg">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
-		<None Update="Asserts\AppleLivePhoto.mov">
+		<None Update="Asserts\*.mov">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
 	</ItemGroup>
