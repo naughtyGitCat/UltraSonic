@@ -1,4 +1,4 @@
-// // zhangruizhi 2024-08-12
+// // naughtyGitCat 2024-08-12
 using LrWallPaper.Services;
 using Microsoft.AspNetCore.Mvc;
 namespace LrWallPaper.Controllers;
