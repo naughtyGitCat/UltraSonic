@@ -39,12 +39,12 @@ public class BusinessJob : BackgroundService
 	        JOIN AgLibraryFile ON Adobe_images.rootFile = AgLibraryFile.id_local
 	        JOIN AgLibraryFolder ON AgLibraryFile.folder = AgLibraryFolder.id_local
 	        JOIN AgLibraryRootFolder ON AgLibraryFolder.rootFolder = AgLibraryRootFolder.id_local
-    WHERE
-        strftime('%m-%d', Adobe_images.captureTime) = '{dateTime:MM-dd}'
-            AND
-        (FileExtension = 'jpg' OR FileExtension = 'JPG')
-        ";
-        _logger.LogDebug(sql);
+        WHERE
+            strftime('%m-%d', Adobe_images.captureTime) = '{dateTime:MM-dd}'
+                AND
+            (FileExtension = 'jpg' OR FileExtension = 'JPG')
+            ";
+        _logger.LogDebug("SQL: {Sql}", sql);
         return await db.FetchAsync<HistoryCapture>(sql);
     }
     
@@ -60,7 +60,7 @@ public class BusinessJob : BackgroundService
             times--;
             if (times <= 0) break;
         }
-        return Array.Empty<HistoryCapture>();
+        return [];
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

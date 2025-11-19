@@ -40,7 +40,6 @@ namespace LrWallPaper.Services
 
         public IEnumerable<HistoryCapture> GetAllCaptures()
         {
-            var captures = new List<HistoryCapture>();
             foreach (var dir in _directories)
             {
                 var files = Directory.GetFiles(dir, "*.*", new EnumerationOptions
