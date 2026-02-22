@@ -42,12 +42,7 @@ namespace LrWallPaper.Services
         {
             foreach (var dir in _directories)
             {
-                var files = Directory.GetFiles(dir, "*.*", new EnumerationOptions
-                {
-                   // MaxRecursionDepth = 888,
-                    IgnoreInaccessible = true,
-                    RecurseSubdirectories = true
-                });
+                var files = FileHelper.GetFilesRecursively(dir, [@"D:\icloud\iCloudDrive", @"D:\扫描文件", @"D:\Twitter的图片"]);
                 foreach (var f in files)
                 {
                     if (!IsPicture(f)) continue;

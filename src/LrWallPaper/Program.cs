@@ -1,10 +1,10 @@
 // psyduck 20220409
 using LrWallPaper.Services;
-
+using ModelContextProtocol.Server;
 using Serilog;
 using Serilog.Events;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Hosting;
+
 using LrWallPaper.Jobs;
 namespace LrWallPaper;
 class Program
@@ -28,6 +28,7 @@ class Program
         // builder.Services.AddHostedService<ExperimentJob>();
         // builder.Services.AddHostedService<SyncRemovableJob>();
         builder.Services.AddHostedService<SyncAppleJob>();
+        builder.Services.AddHostedService<SyncGenericDeviceJob>();
         builder.Services.AddHostedService<PictureMD5Job>();
         builder.Services.AddControllers();
         // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -35,6 +36,11 @@ class Program
         builder.Services.AddSwaggerGen();
         builder.Services.AddSerilog();
 
+        builder.Services.AddMcpServer()
+                        .WithHttpTransport()
+                        .WithToolsFromAssembly()
+                        .WithPromptsFromAssembly()
+                        .WithResourcesFromAssembly();
 
         var app = builder.Build();
 

@@ -9,14 +9,21 @@ namespace LrWallPaper.Jobs
         private readonly ILogger<PictureMD5Job> _logger;
         private readonly FileMD5Manager _databaseService;
         private readonly ICaptureRepository _captureRepository;
-        public PictureMD5Job(ICaptureRepository captureRepository, FileMD5Manager internalDatabaseService, ILogger<PictureMD5Job> logger) 
+        private readonly IConfiguration _configuration;
+        public PictureMD5Job(ICaptureRepository captureRepository, FileMD5Manager internalDatabaseService, ILogger<PictureMD5Job> logger, IConfiguration configuration) 
         {
             _logger = logger;
             _captureRepository = captureRepository;
             _databaseService = internalDatabaseService;
+            _configuration = configuration;
         }
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            if (!_configuration.GetValue<bool>("EnableFullScan"))
+            {
+                _logger.LogInformation("Full scan is disabled by configuration.");
+                return;
+            }
             await Task.CompletedTask;
             while (!stoppingToken.IsCancellationRequested) 
             {

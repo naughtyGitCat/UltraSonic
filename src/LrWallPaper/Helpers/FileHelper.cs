@@ -24,7 +24,7 @@ namespace LrWallPaper.Helpers
         public static string GetMD5(string fileName)
         {
             //新建文件流
-            using FileStream file = new(fileName, FileMode.Open);
+            using FileStream file = new(fileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             //MD5加密服务提供器
             var md5 = MD5.Create();
 
@@ -67,26 +67,39 @@ namespace LrWallPaper.Helpers
         
         public static IEnumerable<string> GetFilesRecursively(string directory, string[] ignorePathPatterns)
         {
-            IEnumerable<string> allFiles = Array.Empty<string>();
-            if (ignorePathPatterns.Any(directory.Contains)) return allFiles;
-            try
+            if (ignorePathPatterns.Any(p => directory.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
             {
-                var files = Directory.GetFiles(directory, "*.*");
-                allFiles = allFiles.Union(files);
+                yield break;
             }
-            // when unauthorized access exception, do not handle
-            catch (UnauthorizedAccessException){}
+
+            string[] files = [];
             try
             {
-                var dirs = Directory.GetDirectories(directory, "*.*");
-                foreach (var d in dirs)
+                files = Directory.GetFiles(directory, "*.*");
+            }
+            catch (UnauthorizedAccessException) { }
+            catch (DirectoryNotFoundException) { }
+
+            foreach (var file in files)
+            {
+                yield return file;
+            }
+
+            string[] dirs = [];
+            try
+            {
+                dirs = Directory.GetDirectories(directory, "*.*");
+            }
+            catch (UnauthorizedAccessException) { }
+            catch (DirectoryNotFoundException) { }
+
+            foreach (var d in dirs)
+            {
+                foreach (var f in GetFilesRecursively(d, ignorePathPatterns))
                 {
-                    allFiles = allFiles.Union(GetFilesRecursively(d));
+                    yield return f;
                 }
             }
-            // when unauthorized access exception, do not handle
-            catch (UnauthorizedAccessException) {}
-            return allFiles;
         }
     }
     

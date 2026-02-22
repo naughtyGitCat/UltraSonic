@@ -41,6 +41,11 @@ namespace LrWallPaper.Jobs
                     _logger.LogWarning(e, "pair failed");
                     continue;
                 }
+                catch (Exception e)
+                {
+                    _logger.LogError(e, "Error initializing Apple device: {DeviceSerial}", device.Serial);
+                    continue;
+                }
             }
             return all;
         }

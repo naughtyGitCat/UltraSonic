@@ -5,7 +5,8 @@
         public static readonly IEnumerable<string> CanonSuffixes = [".cr2", ".cr3"];
         public static readonly IEnumerable<string> CommonSuffixes = [".jpg", ".jpeg", ".png", ".bmp", ".gif", ".heic", 
             // .mov for live photo
-            ".mov"];
+            ".mov",".mp4"];
+        public static readonly IEnumerable<string> DngSuffixes = [".dng"];
         public static readonly IEnumerable<string> SonySuffixes = [".arw", ".sr2", ".srf"];
         public static readonly IEnumerable<string> NikonSuffixes = [".nef", ".nrw"];
         public static readonly IEnumerable<string> FujiSuffixes = [".raf"];
@@ -20,7 +21,8 @@
             ..FujiSuffixes, 
             ..PentaxSuffixes, 
             ..PanasonicSuffixes, 
-            ..OlympusSuffixes];
+            ..OlympusSuffixes,
+            ..DngSuffixes];
     }
 
     public static class DeviceShotPaths
