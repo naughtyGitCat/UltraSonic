@@ -8,7 +8,7 @@ public record HistoryCapture
 {
     public string? FileBaseName { get; set; }
     public string? FileExtension { get; set; }    
-    public EXIFDigest ExifDigest { get; set; }
+    public EXIFDigest? ExifDigest { get; set; }
     public string? AbsolutePath { get; set; }
 }
 public class BusinessJob : BackgroundService
