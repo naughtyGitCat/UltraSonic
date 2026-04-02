@@ -54,6 +54,12 @@ namespace LrWallPaper.Jobs
 
             foreach (var drive in drives)
             {
+                // Re-check IsReady before accessing since the drive might have been disconnected after the initial GetDrives() call
+                if (!drive.IsReady)
+                {
+                    continue;
+                }
+
                 // Skip system and data drives
                 if (drive.Name.StartsWith("C:", StringComparison.OrdinalIgnoreCase) ||
                     drive.Name.StartsWith("D:", StringComparison.OrdinalIgnoreCase))
@@ -189,7 +195,14 @@ namespace LrWallPaper.Jobs
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to process file: {File}", sourceFile);
+                if (ex is DirectoryNotFoundException || ex is IOException || !File.Exists(sourceFile))
+                {
+                    _logger.LogWarning("File or device became unavailable during process (disconnected?): {File}", sourceFile);
+                }
+                else
+                {
+                    _logger.LogError(ex, "Failed to process file: {File}", sourceFile);
+                }
             }
         }
     }

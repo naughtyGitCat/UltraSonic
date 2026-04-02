@@ -1,4 +1,4 @@
-﻿using NPoco;
+using NPoco;
 using System.Data.SQLite;
 using System.Security.Cryptography;
 using System.Data.Common;
@@ -24,6 +24,9 @@ namespace LrWallPaper.Services
 
         [Column("lens_model")]
         public string LensModel { get; set; }
+        
+        [Column("agent_id")]
+        public string? AgentId { get; set; }
 
         [Column("file_size")]
         public long FileSize { get; set; }
@@ -59,6 +62,7 @@ namespace LrWallPaper.Services
                   camera_maker TEXT NOT NULL,
                   camera_model TEXT NOT NULL,
                   lens_model TEXT NOT NULL,
+                  agent_id TEXT NULL,
                   file_size INTEGER NOT NULL,
                   file_md5 TEXT NOT NULL,
                   capture_time DATETIME NOT NULL,
@@ -68,16 +72,25 @@ namespace LrWallPaper.Services
                   UNIQUE (filepath, filename),
                   UNIQUE (filename, file_md5)
                 );
+                
+                CREATE TABLE IF NOT EXISTS agent_info (
+                  id TEXT PRIMARY KEY,
+                  name TEXT NOT NULL,
+                  endpoint TEXT NOT NULL
+                );
                 """;
             _database.Execute( sql );
+
+            try { _database.Execute("ALTER TABLE file_info ADD COLUMN agent_id TEXT NULL;"); } catch {}
+            try { _database.Execute("UPDATE file_info SET agent_id = 'local' WHERE agent_id IS NULL;"); } catch {}
         }
 
         public async Task SaveFileMD5Async(FileMD5Entity file) 
         {
             var sql = $"""
                 INSERT OR REPLACE INTO 
-                file_info (fullpath,filepath,filename,camera_maker,camera_model,lens_model,file_size,file_md5,capture_time,create_time,update_time)
-                VALUES ('{file.FileFullPath}', '{file.FilePath}', '{file.FileName}','{file.CameraMaker}', '{file.CameraModel}', '{file.LensModel}','{file.FileSize}', '{file.FileMD5}','{file.CaptureTime:yyyy-MM-dd HH:mm:ss}', '{DateTime.Now:yyyy-MM-dd HH:mm:ss}',  '{DateTime.Now:yyyy-MM-dd HH:mm:ss}')
+                file_info (fullpath,filepath,filename,camera_maker,camera_model,lens_model,agent_id,file_size,file_md5,capture_time,create_time,update_time)
+                VALUES ('{file.FileFullPath}', '{file.FilePath}', '{file.FileName}','{file.CameraMaker}', '{file.CameraModel}', '{file.LensModel}','{file.AgentId}','{file.FileSize}', '{file.FileMD5}','{file.CaptureTime:yyyy-MM-dd HH:mm:ss}', '{DateTime.Now:yyyy-MM-dd HH:mm:ss}',  '{DateTime.Now:yyyy-MM-dd HH:mm:ss}')
 
                 """;
             _logger.LogInformation(file.ToString());
@@ -85,7 +98,7 @@ namespace LrWallPaper.Services
             var pSQL = """
                                INSERT OR REPLACE INTO 
                                 file_info 
-                                (fullpath,filepath,filename,camera_maker,camera_model,lens_model,file_size,file_md5,capture_time,create_time,update_time)
+                                (fullpath,filepath,filename,camera_maker,camera_model,lens_model,agent_id,file_size,file_md5,capture_time,create_time,update_time)
                                 VALUES 
                                 (
                                     @fullpath, 
@@ -94,6 +107,7 @@ namespace LrWallPaper.Services
                                     @camera_maker, 
                                     @camera_model, 
                                     @lens_model,
+                                    @agent_id,
                                     @file_size, 
                                     @file_md5,
                                     @capture_time, 
@@ -118,6 +132,7 @@ namespace LrWallPaper.Services
             cmd.Parameters.Add(new SQLiteParameter("@camera_maker", file.CameraMaker));
             cmd.Parameters.Add(new SQLiteParameter("@camera_model", file.CameraModel));
             cmd.Parameters.Add(new SQLiteParameter("@lens_model", file.LensModel));
+            cmd.Parameters.Add(new SQLiteParameter("@agent_id", file.AgentId ?? "local"));
             cmd.Parameters.Add(new SQLiteParameter("@file_size", file.FileSize==0?(object)0:file.FileSize));
             cmd.Parameters.Add(new SQLiteParameter("@file_md5", file.FileMD5));
             cmd.Parameters.Add(new SQLiteParameter("@capture_time", $"{file.CaptureTime:yyyy-MM-dd HH:mm:ss}"));
@@ -200,6 +215,12 @@ namespace LrWallPaper.Services
                     fullpath='{Path.Join(filepath, filename.Replace("@", "@@"))}'
                 """;
             await _database.ExecuteAsync(sql);
+        }
+
+        public async Task<List<FileMD5Entity>> GetPagedCapturesAsync(int page, int pageSize)
+        {
+            var sql = "SELECT * FROM file_info ORDER BY capture_time DESC LIMIT @0 OFFSET @1";
+            return await _database.FetchAsync<FileMD5Entity>(sql, pageSize, (page - 1) * pageSize);
         }
     }
 }
