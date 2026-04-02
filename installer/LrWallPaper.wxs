@@ -21,4 +21,10 @@
     </Feature>
 
   </Package>
+
+  <Fragment>
+    <ComponentGroup Id="PublishFiles" Directory="INSTALLDIR">
+      <Files Include="$(var.PublishDir)\**" />
+    </ComponentGroup>
+  </Fragment>
 </Wix>
