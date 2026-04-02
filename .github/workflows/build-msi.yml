@@ -23,10 +23,7 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Install WiX Toolset v5
-        run: dotnet tool install --global wix
-
-      - name: Add WiX heat extension
-        run: wix extension add WixToolset.Heat.wixext
+        run: dotnet tool install --global wix --version 5.0.2
 
       # ── Publish ──────────────────────────────────────────────
 
@@ -42,30 +39,13 @@ jobs:
           -c Release -r win-x64 --self-contained
           -o publish/LrWallPaper.Agent
 
-      # ── Heat: harvest publish output into WiX fragments ─────
-
-      - name: Heat LrWallPaper files
-        run: >
-          wix heat dir publish/LrWallPaper
-          -cg PublishFiles -dr INSTALLDIR -srd -sreg -ag -sfrag
-          -var var.PublishDir
-          -o installer/LrWallPaper.Files.wxs
-
-      - name: Heat LrWallPaper.Agent files
-        run: >
-          wix heat dir publish/LrWallPaper.Agent
-          -cg PublishFiles -dr INSTALLDIR -srd -sreg -ag -sfrag
-          -var var.PublishDir
-          -o installer/LrWallPaper.Agent.Files.wxs
-
       # ── Build MSI ───────────────────────────────────────────
 
       - name: Build LrWallPaper MSI
         run: >
           wix build
           installer/LrWallPaper.wxs
-          installer/LrWallPaper.Files.wxs
-          -d PublishDir=publish/LrWallPaper
+          -d PublishDir=publish\LrWallPaper
           -arch x64
           -o output/UltraSonic.LrWallPaper.msi
 
@@ -73,8 +53,7 @@ jobs:
         run: >
           wix build
           installer/LrWallPaper.Agent.wxs
-          installer/LrWallPaper.Agent.Files.wxs
-          -d PublishDir=publish/LrWallPaper.Agent
+          -d PublishDir=publish\LrWallPaper.Agent
           -arch x64
           -o output/UltraSonic.LrWallPaper.Agent.msi
 
