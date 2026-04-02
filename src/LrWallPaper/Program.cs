@@ -25,6 +25,7 @@ class Program
         // builder.Services.AddHostedService<BusinessJob>();
         builder.Services.AddSingleton<ICaptureRepository, CaptureRawRepository>();
         builder.Services.AddSingleton<FileMD5Manager>();
+        builder.Services.AddSingleton<AgentManager>();
         // builder.Services.AddHostedService<ExperimentJob>();
         // builder.Services.AddHostedService<SyncRemovableJob>();
         builder.Services.AddHostedService<SyncAppleJob>();
@@ -51,11 +52,51 @@ class Program
             app.UseSwaggerUI();
         }
 
-        app.UseHttpsRedirection();
+// app.UseHttpsRedirection();
 
         app.UseAuthorization();
 
         app.MapControllers();
+
+        app.MapGet("/api/image", async (string path, string? agentId, AgentManager agentManager) =>
+        {
+            if (string.IsNullOrEmpty(path)) return Results.NotFound();
+
+            var ext = System.IO.Path.GetExtension(path).ToLowerInvariant();
+            var contentType = ext switch {
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".gif" => "image/gif",
+                ".bmp" => "image/bmp",
+                ".webp" => "image/webp",
+                ".heic" => "image/heic",
+                ".mp4" => "video/mp4",
+                ".mov" => "video/quicktime",
+                ".avi" => "video/x-msvideo",
+                ".mkv" => "video/x-matroska",
+                ".mts" => "video/mp2t",
+                _ => "application/octet-stream"
+            };
+
+            if (string.IsNullOrEmpty(agentId) || agentId == "local")
+            {
+                if (!System.IO.File.Exists(path)) return Results.NotFound();
+                return Results.File(path, contentType);
+            }
+            
+            // Remote agent fetch
+            var agents = await agentManager.GetAllAgentsAsync();
+            var agent = agents.FirstOrDefault(a => a.Id == agentId);
+            if (agent == null || string.IsNullOrEmpty(agent.Endpoint)) return Results.NotFound();
+
+            var client = new HttpClient();
+            try {
+                var stream = await client.GetStreamAsync($"{agent.Endpoint.TrimEnd('/')}/api/agent/image?path={Uri.EscapeDataString(path)}");
+                return Results.File(stream, contentType);
+            } catch {
+                return Results.StatusCode(502);
+            }
+        });
 
         app.Run();
         

@@ -1,0 +1,24 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+    Name="UltraSonic LrWallPaper Agent"
+    Manufacturer="NaughtyGitCat"
+    Version="1.0.0.0"
+    UpgradeCode="B2C3D4E5-F6A7-8901-BCDE-F12345678901"
+    Compressed="yes"
+    InstallerVersion="500">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of UltraSonic LrWallPaper Agent is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="ULTRASONICDIR" Name="UltraSonic">
+        <Directory Id="INSTALLDIR" Name="LrWallPaper.Agent" />
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="ProductFeature" Title="UltraSonic LrWallPaper Agent" Level="1">
+      <ComponentGroupRef Id="PublishFiles" />
+    </Feature>
+
+  </Package>
+</Wix>
