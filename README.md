@@ -1,159 +1,281 @@
 # UltraSonic
 
-UltraSonic 是一组围绕照片管理的工具：扫描本地照片与 RAW、解析 EXIF/QuickTime 元数据、从 iOS/Android 设备导入到本地归档目录、记录 MD5 指纹以去重，并可将当天或最近拍摄的照片设置为 Windows 桌面壁纸。
+分布式本地照片 / RAW 管理平台。通过 **Master-Agent** 架构，将分散在多台 Windows 机器上的照片建立统一的元数据索引，支持从 iOS 设备与可移动存储自动导入，提供 MD5 去重、EXIF 解析、多节点 P2P 同步与 React95 风格 Web 画廊。
 
-## 特性
-- 本地扫描与解析：遍历指定盘符下的图片与常见 RAW 格式，解析 EXIF 信息与拍摄时间
-- iOS 导入：通过 Usbmux + Lockdown + AFC 访问 `DCIM`，支持 Apple Live Photo 的 `.mov` 元数据解析
-- 分布式集群同步 (Multi-Master Sync)：支持配置多个中控节点，通过应用层 P2P (Gossip) 异步广播同步数据，实现高可用最终一致性
-- 去重记录：以 SQLite 记录文件路径、大小、MD5、拍摄时间、设备信息，支持去重判断与快速查询
-- 自动壁纸：每日或指定范围内的照片轮换设置为 Windows 桌面壁纸（可选）
-- Web API：提供基础查询接口与 Swagger 文档（开发模式）
+---
 
-## 环境要求
-- 操作系统：Windows 7 及以上
-- 运行时：.NET 8 SDK/Runtime
+## 功能特性
+
+- **分布式扫描**：Agent 节点定期扫描本地目录，将 EXIF 元数据 + MD5 指纹批量推送给 Master
+- **iOS 导入**：通过 USB AFC 访问 `DCIM`，自动归档、支持 Apple Live Photo `.MOV` 元数据解析
+- **可移动存储导入**：自动检测 SD 卡等可移动驱动器上的 DCIM，复制并归档照片
+- **MD5 去重**：以 `filename + file_md5` 联合约束防止重复入库，入库前可向 Master 预查询
+- **多 Master Gossip 同步**：配置 Peer 节点后，数据通过应用层 P2P 广播实现跨机器最终一致性
+- **Web 画廊**：React95 风格前端，内嵌于 Master，支持按日期/分页浏览
+- **图片代理**：Master 统一代理所有 Agent 上的图片流，前端无需感知分布式拓扑
+- **MCP 集成**：预留 Model Context Protocol 工具接口，可被 AI 客户端调用
+- **Windows 托盘**：Agent / Master 均提供系统托盘图标，支持暂停扫描、开机自启等快捷操作
+- **自动壁纸**（可选）：`BusinessJob` 可将最近拍摄的照片设置为 Windows 桌面壁纸
+
+---
+
+## 系统要求
+
+- **操作系统**：Windows 10 / 11（64 位）
+- **运行时**：.NET 10 Runtime（使用 MSI 安装包时已自包含，无需单独安装）
+- **iOS 导入**：需在设备上选择「信任此电脑」并保持 USB 连接
+
+---
 
 ## 快速开始
 
-本项目现在包含后端（数据同步与 API 服务）和前端（基于 React95 构建的复古相册展示）两部分。请分别在两个终端中运行它们：
+### 方式一：MSI 安装包（推荐）
 
-**1. 启动后端服务 (.NET 8):**
-```pwsh
+从 [GitHub Releases](https://github.com/naughtyGitCat/UltraSonic/releases) 下载最新版：
+
+- `UltraSonic.LrWallPaper.msi` — Master 中控节点
+- `UltraSonic.LrWallPaper.Agent.msi` — Agent 代理节点
+
+安装后分别启动两个程序，系统托盘会出现对应图标。
+
+### 方式二：源码运行
+
+```powershell
 git clone https://github.com/naughtyGitCat/UltraSonic
+```
+
+**1. 启动 Master（中控节点）**
+
+```powershell
 cd src/LrWallPaper
 dotnet run
 ```
-首次运行会在项目根目录创建内置 SQLite 数据库文件 `ultrasonic.db`（用于保存文件指纹）。开发模式下自动启用 Swagger UI。
 
-**2. 启动前端画廊 (React + Vite):**
-```pwsh
+首次运行在程序目录自动创建 `ultrasonic.db`。开发模式下自动启用 Swagger UI（`http://localhost:5281/swagger`）。
+
+**2. 启动 Agent（扫描节点）**
+
+```powershell
+cd src/LrWallPaper.Agent
+dotnet run
+```
+
+**3. 启动前端画廊（开发调试用）**
+
+```powershell
 cd src/LrWallPaper.React
 npm install
 npm run dev
 ```
-启动后按照控制台提示打开浏览器（如 `http://localhost:5173`），即可体验 Win95 风格的本地照片展示页面。
 
-## 配置与路径
-- 默认扫描源与归档路径使用了硬编码的 Windows 盘符：
-  - 本地扫描根目录：`D:\`（本地历史照片检索）
-  - iOS 临时拉取目录：`F:\`，归档目录：`D:\Photograph\年\yyyy-MM-dd`
-  - Lightroom 数据库路径：`D:\…\Lightroom\Lightroom Catalog-v11.lrcat`
-- 若你的环境盘符不同，建议修改以下位置以适配：
-  - 本地扫描目录：`src/LrWallPaper/Services/CaptureRawRepository.cs`
-  - iOS 导入路径：`src/LrWallPaper/Jobs/SyncAppleJob.cs`
-  - Lightroom DB 连接串：`src/LrWallPaper/Services/SQLiteFactory.cs`
-  - 常量路径：`src/LrWallPaper/Common/Constants.cs`
+浏览器打开 `http://localhost:5173` 即可预览。生产部署时前端已打包进 Master 的 `wwwroot`，直接访问 `http://localhost:5281` 即可。
 
-后续版本将把上述路径迁移至 `appsettings.json` 统一配置。
+---
 
-## 后台任务
-应用启动时按需注册以下后台任务（可在 `Program.cs` 打开/关闭）：
-- iOS 导入：`SyncAppleJob`（默认启用）
-- MD5 指纹：`PictureMD5Job`（默认启用）
-- 壁纸轮换：`BusinessJob`（当前注释，按需启用）
-- 可移动设备枚举：`SyncRemovableJob`（当前注释，Android 导入功能进行中）
+## 配置
+
+所有路径均通过 `appsettings.json` 配置，无需改动源码。
+
+### Master（`src/LrWallPaper/appsettings.json`）
+
+```json
+{
+  "Urls": "http://localhost:5281",
+  "MasterCluster": {
+    "Peers": []
+  },
+  "UltraSonic": {
+    "AppleImport": {
+      "TempDirectory": "F:\\",
+      "ArchiveDirectory": "D:\\Photograph"
+    },
+    "ArchivePaths": {
+      "Current": "D:/摄影",
+      "History": "X:/摄影"
+    }
+  }
+}
+```
+
+多节点集群：在 `Peers` 数组中填入其他 Master 的地址，如 `["http://192.168.1.10:5281"]`。
+
+### Agent（`src/LrWallPaper.Agent/appsettings.json`）
+
+```json
+{
+  "Urls": "http://localhost:5282",
+  "DeviceSync": {
+    "AppleImport": {
+      "TempDirectory": "F:\\",
+      "ArchiveDirectory": "D:\\Photograph"
+    },
+    "GenericImport": {
+      "ArchiveDirectory": "D:\\Photograph"
+    }
+  },
+  "Agent": {
+    "AgentId": "my-desktop",
+    "MasterEndpoint": "http://localhost:5281",
+    "ScanPaths": ["D:\\Photograph"],
+    "ScanIntervalMinutes": 60
+  }
+}
+```
+
+`AgentId` 建议设置为有意义的固定字符串（如机器名），保证重启后 ID 一致。
+
+---
+
+## 架构概览
+
+```
+iOS/SD Card ──USB──► LrWallPaper.Agent ──HTTP Push──► LrWallPaper (Master)
+本地目录 ────────────► (port 5282)                     (port 5281)
+                                                              │
+                                                       SQLite 持久化
+                                                              │
+                                                       Gossip 同步 ──► Peer Master
+```
+
+详见 [`docs/SDD.md`](docs/SDD.md)。
+
+---
+
+## 后台任务一览
+
+### Agent
+
+| Job | 默认状态 | 说明 |
+|---|---|---|
+| `ScanAndPushJob` | 启用 | 定期扫描本地目录，推送元数据到 Master |
+| `DeviceSyncAppleJob` | 启用 | iOS 设备照片导入与归档 |
+| `DeviceSyncGenericJob` | 启用 | 可移动存储（SD 卡）导入与归档 |
+
+### Master
+
+| Job | 默认状态 | 说明 |
+|---|---|---|
+| `MasterReplicationJob` | 启用 | Gossip 广播到 Peer Master 节点 |
+| `BusinessJob` | 注释 | 壁纸轮换，按需在 `Program.cs` 中启用 |
+| `SyncRemovableJob` | 注释 | 设备枚举监控（已移至 Agent） |
+
+---
 
 ## Web API
-- `GET /api/Experiment/{days}`：返回近 `days` 天内扫描到的本地照片信息
-- `GET /api/Device`：占位接口，用于设备信息查询（目前返回 `ok`）
 
-开发模式下可通过 Swagger UI 试用接口。
+| 接口 | 说明 |
+|---|---|
+| `POST /api/master/sync` | 接收 Agent 推送的文件元数据批次 |
+| `GET /api/master/file-exists?filename=&size=` | 去重预检（Agent 调用） |
+| `GET /api/experiment/{days}` | 返回最近 N 天的拍摄记录 |
+| `GET /api/experiment/page?page=&pageSize=` | 分页查询文件记录 |
+| `GET /api/image?path=&agentId=` | 图片流代理（透明转发到 Agent） |
+| `GET /api/agent` | 查询所有已注册的 Agent |
+
+开发模式下访问 `http://localhost:5281/swagger` 可在线试用全部接口。
+
+---
 
 ## 数据存储
-- 内置库：`ultrasonic.db`
-- 表结构：`file_info`（唯一键覆盖 `fullpath` 与 `filename+file_md5`），字段包含路径、文件名、大小、MD5、拍摄时间、设备与镜头信息、创建/更新时间
 
-## 设备支持
-- iOS：已实现。需在设备上选择“信任此电脑”，并保持数据线连接以访问 `DCIM`
-- Android：基础枚举已接入（MTP 设备），导入逻辑完善中
+- **数据库**：SQLite（`ultrasonic.db`，程序目录下自动创建）
+- **主表** `file_info`：路径、文件名、大小、MD5、拍摄时间、相机信息、来源 Agent ID
+- **唯一约束**：`fullpath`、`(filepath, filename)`、`(filename, file_md5)`
+- **写入策略**：`INSERT OR REPLACE`（upsert，天然幂等）
+
+---
 
 ## 常见问题
-- iOS 连接报错 `FatalPairingException`：请在手机上信任电脑并重试；若仍失败，检查数据线与驱动
-- 访问云盘文件时报错 `Access to the cloud file is denied`：本工具会跳过无法访问的云文件，请确保相关文件已本地可用
-- 壁纸设置无效：请确认 Windows 版本与注册表权限；本功能仅在 Windows 环境生效
 
-## 参考
-- EXIF 基础资料：https://www.media.mit.edu/pia/Research/deepview/exif.html
-- 元数据解析库（.NET）：https://github.com/drewnoakes/metadata-extractor-dotnet
+**iOS 连接报 `FatalPairingException`**  
+在手机上选择「信任此电脑」后重试。若仍失败，检查数据线和驱动程序（Apple 设备服务）。
+
+**Agent 不扫描文件**  
+检查 `appsettings.json` 中 `Agent:ScanPaths` 路径是否存在；也可通过托盘菜单确认扫描未被暂停。
+
+**设备导入不工作**  
+确认 `DeviceSync:AppleImport:ArchiveDirectory` 已配置且目录可写。日志文件在 `logs/agent-*.txt`。
+
+**访问云盘文件报错 `Access to the cloud file is denied`**  
+正常现象，程序会跳过无法访问的云同步文件。确保需要处理的文件已下载到本地。
+
+**壁纸设置无效**  
+取消注释 `Program.cs` 中的 `BusinessJob`，重新构建运行。本功能仅在 Windows 环境生效。
+
+---
+
+## 参考资料
+
+- EXIF 规范：https://www.media.mit.edu/pia/Research/deepview/exif.html
+- MetadataExtractor (.NET)：https://github.com/drewnoakes/metadata-extractor-dotnet
+- Netimobiledevice：https://github.com/artehe/Netimobiledevice
 
 ---
 
 # UltraSonic (English)
 
-UltraSonic is a set of photo management tools: it scans local photos and RAW files, parses EXIF/QuickTime metadata, imports from iOS/Android devices into local archive folders, records MD5 fingerprints for de-duplication, and can set today’s or recent photos as the Windows desktop wallpaper.
+A distributed local photo / RAW management platform. The **Master-Agent** architecture builds a unified metadata index across multiple Windows machines, with automatic import from iOS devices and removable storage, MD5 de-duplication, EXIF parsing, multi-node P2P sync, and a React95-style web gallery.
 
 ## Features
-- Local scan and parsing: traverse specified drives for images and common RAW formats; parse EXIF and capture time
-- iOS import: access `DCIM` via Usbmux + Lockdown + AFC; supports Apple Live Photo `.mov` metadata parsing
-- Multi-Master Cluster Sync: configure multiple central nodes; uses application-layer P2P (Gossip) asynchronous broadcasting to replicate data for high-availability eventual consistency
-- De-dup with records: store path, size, MD5, capture time, device info in SQLite for quick checks and queries
-- Auto wallpaper: rotate desktop wallpaper with daily or recent captures (optional)
-- Web API: basic query endpoints with Swagger in development mode
+
+- **Distributed scanning**: Agent nodes periodically scan local folders and push EXIF metadata + MD5 fingerprints to Master in batches
+- **iOS import**: Access `DCIM` over USB AFC, archive by capture date, support Apple Live Photo `.MOV` metadata
+- **Removable storage import**: Auto-detect SD cards / cameras with DCIM folders, copy and archive files
+- **MD5 de-duplication**: `UNIQUE (filename, file_md5)` constraint prevents duplicates; Agents pre-check with Master before downloading
+- **Multi-Master Gossip sync**: Configure Peer nodes for eventual-consistency replication via application-layer P2P broadcast
+- **Web gallery**: React95-style frontend embedded in Master, browse by date or page
+- **Image proxy**: Master transparently proxies image streams from any Agent — frontend needs no topology awareness
+- **MCP integration**: Model Context Protocol tool endpoint reserved for AI client integration
+- **Windows tray**: Both Agent and Master provide tray icons with pause/resume, startup toggle, and config editing
+- **Auto wallpaper** (optional): `BusinessJob` sets recent captures as the Windows desktop wallpaper
 
 ## Requirements
-- OS: Windows 10 or later
-- Runtime: .NET 10 SDK/Runtime
+
+- **OS**: Windows 10 / 11 (64-bit)
+- **Runtime**: .NET 10 Runtime (self-contained in MSI installer — no separate install needed)
+- **iOS import**: Trust the computer on the device and maintain USB connection
 
 ## Quick Start
 
-This project consists of a backend data/API service and a retro-style frontend gallery built with React95. Please run them in two separate terminal windows:
+### Option 1: MSI Installer (Recommended)
 
-**1. Start the Backend Service (.NET 8):**
-```pwsh
+Download the latest release from [GitHub Releases](https://github.com/naughtyGitCat/UltraSonic/releases):
+
+- `UltraSonic.LrWallPaper.msi` — Master node
+- `UltraSonic.LrWallPaper.Agent.msi` — Agent node
+
+### Option 2: Build from Source
+
+```powershell
 git clone https://github.com/naughtyGitCat/UltraSonic
-cd src/LrWallPaper
-dotnet run
+
+# Terminal 1 — Master
+cd src/LrWallPaper && dotnet run
+
+# Terminal 2 — Agent
+cd src/LrWallPaper.Agent && dotnet run
+
+# Terminal 3 — Frontend (dev only)
+cd src/LrWallPaper.React && npm install && npm run dev
 ```
-On first run, an internal SQLite database `ultrasonic.db` will be created at the project root for file fingerprints. Swagger UI is active in development.
 
-**2. Start the Frontend Gallery (React + Vite):**
-```pwsh
-cd src/LrWallPaper.React
-npm install
-npm run dev
-```
-Once started, open the provided URL in your browser (e.g., `http://localhost:5173`) to view your local photo gallery in a classic Windows 95 aesthetic.
+## Configuration
 
-## Configuration & Paths
-- The default sources and archive paths currently use hard-coded Windows drive letters:
-  - Local scan root: `D:\` (local history photo discovery)
-  - iOS temp pull: `F:\`; archive to `D:\Photograph\Year\yyyy-MM-dd`
-  - Lightroom catalog: `D:\…\Lightroom\Lightroom Catalog-v11.lrcat`
-- If your environment differs, update these locations:
-  - Local scan directory: `src/LrWallPaper/Services/CaptureRawRepository.cs`
-  - iOS import paths: `src/LrWallPaper/Jobs/SyncAppleJob.cs`
-  - Lightroom DB connection: `src/LrWallPaper/Services/SQLiteFactory.cs`
-  - Constant paths: `src/LrWallPaper/Common/Constants.cs`
+All paths are configured via `appsettings.json` — no source changes needed.
 
-These paths will be migrated to `appsettings.json` in future versions.
+Set `Agent:AgentId` to a stable string (e.g. machine hostname). Leave `MasterCluster:Peers` empty for single-node mode.
 
-## Background Jobs
-Enabled/disabled via `Program.cs`:
-- iOS import: `SyncAppleJob` (enabled by default)
-- MD5 fingerprints: `PictureMD5Job` (enabled by default)
-- Wallpaper rotation: `BusinessJob` (currently commented, enable as needed)
-- Removable devices enumeration: `SyncRemovableJob` (currently commented; Android import in progress)
-
-## Web API
-- `GET /api/Experiment/{days}`: returns local photo entries captured within the last `days`
-- `GET /api/Device`: placeholder device endpoint (currently returns `ok`)
-
-Use Swagger UI in development to try the endpoints.
-
-## Data Storage
-- Internal DB: `ultrasonic.db`
-- Schema: `file_info` (unique keys on `fullpath` and `filename+file_md5`), fields include path, name, size, MD5, capture time, device/lens info, create/update timestamps
-
-## Device Support
-- iOS: implemented. You must trust the computer on the device and keep the cable connected to access `DCIM`
-- Android: basic MTP device enumeration available; import logic is being improved
+See [`docs/SDD.md`](docs/SDD.md) for full architecture and API reference.
 
 ## FAQ
-- `FatalPairingException` when connecting to iOS: trust the computer on the device and retry; check cable and drivers if it persists
-- `Access to the cloud file is denied`: the tool skips inaccessible cloud files; ensure they are locally available
-- Wallpaper not applied: verify Windows version and registry permissions; this feature is Windows-only
+
+- **`FatalPairingException`**: Trust the computer on the iOS device and retry; check cable/drivers if it persists.
+- **Agent not scanning**: Verify `Agent:ScanPaths` directories exist; check the tray icon to confirm scanning is not paused.
+- **Cloud file access denied**: Expected behavior — the tool skips files not downloaded locally.
+- **Wallpaper not changing**: Uncomment `BusinessJob` in `Program.cs` and rebuild. Windows-only feature.
 
 ## References
-- EXIF: https://www.media.mit.edu/pia/Research/deepview/exif.html
-- Metadata extractor (.NET): https://github.com/drewnoakes/metadata-extractor-dotnet
+
+- EXIF spec: https://www.media.mit.edu/pia/Research/deepview/exif.html
+- MetadataExtractor (.NET): https://github.com/drewnoakes/metadata-extractor-dotnet
+- Netimobiledevice: https://github.com/artehe/Netimobiledevice
