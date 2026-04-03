@@ -24,7 +24,8 @@ public class AgentManager
     public AgentManager(ILogger<AgentManager> logger)
     {
         _logger = logger;
-        _database = new Database(@"Data Source=ultrasonic.db", DatabaseType.SQLite, SQLiteFactory.Instance);
+        var dbPath = Path.Combine(AppContext.BaseDirectory, "ultrasonic.db");
+        _database = new Database($"Data Source={dbPath}", DatabaseType.SQLite, SQLiteFactory.Instance);
     }
 
     public async Task<List<AgentEntity>> GetAllAgentsAsync()
