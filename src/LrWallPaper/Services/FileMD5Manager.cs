@@ -43,11 +43,14 @@ namespace LrWallPaper.Services
     public class FileMD5Manager
     {
         private readonly IDatabase _database;
-        private readonly ILogger<FileMD5Manager> _logger;   
+        private readonly ILogger<FileMD5Manager> _logger;
+        private readonly string _connectionString;
         public FileMD5Manager(ILogger<FileMD5Manager> logger) 
         {
             _logger = logger;
-            _database = new Database(@"Data Source=ultrasonic.db", DatabaseType.SQLite, SQLiteFactory.Instance);
+            var dbPath = Path.Combine(AppContext.BaseDirectory, "ultrasonic.db");
+            _connectionString = $"Data Source={dbPath}";
+            _database = new Database(_connectionString, DatabaseType.SQLite, SQLiteFactory.Instance);
             PrepareTable();
         }
 
