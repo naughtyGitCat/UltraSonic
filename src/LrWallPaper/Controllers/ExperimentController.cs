@@ -7,21 +7,19 @@ namespace LrWallPaper.Controllers;
 [ApiController]
 public class ExperimentController : ControllerBase
 {
-    private readonly ICaptureRepository _captureRepository;
     private readonly ILogger<ExperimentController> _logger;
     private readonly FileMD5Manager _md5Manager;
-    public ExperimentController(ICaptureRepository captureRepository, ILogger<ExperimentController> logger, FileMD5Manager md5Manager)
+    public ExperimentController(ILogger<ExperimentController> logger, FileMD5Manager md5Manager)
     {
         _logger = logger;
-        _captureRepository = captureRepository;
         _md5Manager = md5Manager;
     }
 
     [HttpGet("{days:int}")]
-    public object Get(int days)
+    public async Task<object> Get(int days)
     {
-        _logger.LogInformation("days: {d}",days);
-        return _captureRepository.GetRecentCaptures(new TimeSpan(days, 0,0,0));
+        _logger.LogInformation("days: {d}", days);
+        return await _md5Manager.GetRecentCapturesAsync(new TimeSpan(days, 0, 0, 0));
     }
 
     [HttpGet("page")]

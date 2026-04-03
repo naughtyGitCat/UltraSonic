@@ -28,14 +28,13 @@ class Program
         // Add services to the container.
         builder.Services.AddSingleton<ICustomSQLiteFactory, CustomSQLiteFactory>();
         // builder.Services.AddHostedService<BusinessJob>();
-        builder.Services.AddSingleton<ICaptureRepository, CaptureRawRepository>();
         builder.Services.AddSingleton<FileMD5Manager>();
         builder.Services.AddSingleton<AgentManager>();
         // builder.Services.AddHostedService<ExperimentJob>();
         // builder.Services.AddHostedService<SyncRemovableJob>();
-        builder.Services.AddHostedService<SyncAppleJob>();
-        builder.Services.AddHostedService<SyncGenericDeviceJob>();
-        builder.Services.AddHostedService<PictureMD5Job>();
+        // builder.Services.AddHostedService<PictureMD5Job>(); // moved to Agent
+        // builder.Services.AddHostedService<SyncAppleJob>(); // moved to Agent
+        // builder.Services.AddHostedService<SyncGenericDeviceJob>(); // moved to Agent
         builder.Services.AddHttpClient("ClusterClient");
         builder.Services.AddSingleton<MasterReplicationService>();
         builder.Services.AddHostedService<MasterReplicationJob>();

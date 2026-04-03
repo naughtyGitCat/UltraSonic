@@ -7,6 +7,6 @@ using LrWallPaper.Services;
 namespace LrWallPaper.MCP;
 
 [McpServerToolType]
-public class Tool(ILogger<Tool> _logger, ICaptureRepository _captureRepository)
+public class Tool(ILogger<Tool> _logger)
 {
 }
