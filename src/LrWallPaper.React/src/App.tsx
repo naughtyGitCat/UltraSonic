@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createGlobalStyle, ThemeProvider } from 'styled-components';
-import { styleReset, Window, WindowHeader, WindowContent, Button, ScrollView, Tabs, Tab, TabBody, TextInput, Table, TableHead, TableRow, TableHeadCell, TableBody, TableDataCell } from 'react95';
+import { styleReset, Window, WindowHeader, WindowContent, Button, ScrollView, Tabs, Tab, TabBody, TextInput, Table, TableHead, TableRow, TableHeadCell, TableBody, TableDataCell, Select } from 'react95';
 import original from 'react95/dist/themes/original';
 import ms_sans_serif from 'react95/dist/fonts/ms_sans_serif.woff2';
 import ms_sans_serif_bold from 'react95/dist/fonts/ms_sans_serif_bold.woff2';
@@ -39,6 +39,22 @@ interface Capture {
   fileName: string;
   captureTime?: string;
   agentId?: string;
+  cameraMaker?: string;
+  cameraModel?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+interface CameraOption {
+  cameraMaker: string;
+  cameraModel: string;
+}
+
+interface FilterOptions {
+  years: string[];
+  cameras: CameraOption[];
+  agents: string[];
+  hasGpsData: boolean;
 }
 
 interface Agent {
@@ -68,6 +84,16 @@ function App() {
   const [newAgentName, setNewAgentName] = useState('');
   const [newAgentIp, setNewAgentIp] = useState('');
 
+  // Filter State
+  const [filterOptions, setFilterOptions] = useState<FilterOptions>({ years: [], cameras: [], agents: [], hasGpsData: false });
+  const [filterYear, setFilterYear] = useState<string>('');
+  const [filterMonth, setFilterMonth] = useState<string>('');
+  const [filterDay, setFilterDay] = useState<string>('');
+  const [filterCamera, setFilterCamera] = useState<string>('');
+  const [filterMediaType, setFilterMediaType] = useState<string>('');
+  const [filterAgent, setFilterAgent] = useState<string>('');
+  const [filterHasGps, setFilterHasGps] = useState<string>('');
+
   // Cluster State
   const [clusterNodes, setClusterNodes] = useState<ClusterNode[]>([]);
 
@@ -89,11 +115,35 @@ function App() {
     [loading, hasMore]
   );
 
+  const hasActiveFilters = filterYear || filterMonth || filterDay || filterCamera || filterMediaType || filterAgent || filterHasGps;
+
+  const buildFilterUrl = (p: number) => {
+    const params = new URLSearchParams();
+    params.set('page', p.toString());
+    params.set('pageSize', '30');
+    if (filterYear) params.set('year', filterYear);
+    if (filterMonth) params.set('month', filterMonth);
+    if (filterDay) params.set('day', filterDay);
+    if (filterCamera) {
+      const [maker, ...modelParts] = filterCamera.split('|');
+      params.set('cameraMaker', maker);
+      params.set('cameraModel', modelParts.join('|'));
+    }
+    if (filterMediaType) params.set('mediaType', filterMediaType);
+    if (filterAgent) params.set('agentId', filterAgent);
+    if (filterHasGps) params.set('hasGps', filterHasGps);
+    return `/api/Experiment/filter?${params.toString()}`;
+  };
+
   useEffect(() => {
     if (!hasMore) return;
-    
+
     setLoading(true);
-    fetch(`/api/Experiment/page?page=${page}&pageSize=30`)
+    const url = hasActiveFilters
+      ? buildFilterUrl(page)
+      : `/api/Experiment/page?page=${page}&pageSize=30`;
+
+    fetch(url)
       .then(res => res.json())
       .then((data: Capture[]) => {
         if (!data || data.length === 0) {
@@ -111,7 +161,11 @@ function App() {
         console.error('Error fetching images:', err);
         setLoading(false);
       });
-  }, [page]);
+  }, [page, filterYear, filterMonth, filterDay, filterCamera, filterMediaType, filterAgent, filterHasGps]);
+
+  useEffect(() => {
+    fetchFilterOptions();
+  }, []);
 
   useEffect(() => {
     if (activeTab === 1) {
@@ -119,6 +173,37 @@ function App() {
       fetchClusterNodes();
     }
   }, [activeTab]);
+
+  const fetchFilterOptions = () => {
+    fetch('/api/Experiment/filter-options')
+      .then(res => res.json())
+      .then((data: FilterOptions) => setFilterOptions(data))
+      .catch(console.error);
+  };
+
+  const resetFiltersAndReload = () => {
+    setCaptures([]);
+    setPage(1);
+    setHasMore(true);
+  };
+
+  const handleFilterChange = (setter: (v: string) => void) => (option: { value: string }) => {
+    setter(option.value);
+    setCaptures([]);
+    setPage(1);
+    setHasMore(true);
+  };
+
+  const handleClearFilters = () => {
+    setFilterYear('');
+    setFilterMonth('');
+    setFilterDay('');
+    setFilterCamera('');
+    setFilterMediaType('');
+    setFilterAgent('');
+    setFilterHasGps('');
+    resetFiltersAndReload();
+  };
 
   const fetchAgents = () => {
     fetch('/api/agent')
@@ -174,8 +259,82 @@ function App() {
               
               {activeTab === 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, height: '100%' }}>
-                  <div style={{ marginBottom: '10px' }}>
-                    Showing {captures.length} files (Scrolling to load more)
+                  <fieldset style={{ border: '2px solid groove', padding: '8px', marginBottom: '8px' }}>
+                    <legend>Filters</legend>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <Select
+                        value={filterYear ? Number(filterYear) : 0}
+                        options={[{ value: 0, label: 'Year' }, ...filterOptions.years.map(y => ({ value: Number(y), label: y }))]}
+                        onChange={(e) => handleFilterChange(setFilterYear)({ value: e.value === 0 ? '' : String(e.value) })}
+                        width={100}
+                        menuMaxHeight={200}
+                      />
+                      <Select
+                        value={filterMonth ? Number(filterMonth) : 0}
+                        options={[{ value: 0, label: 'Month' }, ...[...Array(12)].map((_, i) => ({ value: i + 1, label: `${i + 1}` }))]}
+                        onChange={(e) => handleFilterChange(setFilterMonth)({ value: e.value === 0 ? '' : String(e.value) })}
+                        width={95}
+                        menuMaxHeight={200}
+                      />
+                      <Select
+                        value={filterDay ? Number(filterDay) : 0}
+                        options={[{ value: 0, label: 'Day' }, ...[...Array(31)].map((_, i) => ({ value: i + 1, label: `${i + 1}` }))]}
+                        onChange={(e) => handleFilterChange(setFilterDay)({ value: e.value === 0 ? '' : String(e.value) })}
+                        width={85}
+                        menuMaxHeight={200}
+                      />
+                      <Select
+                        value={filterCamera || '__all__'}
+                        options={[
+                          { value: '__all__', label: 'Camera' },
+                          ...filterOptions.cameras.map(c => ({
+                            value: `${c.cameraMaker}|${c.cameraModel}`,
+                            label: `${c.cameraMaker} ${c.cameraModel}`
+                          }))
+                        ]}
+                        onChange={(e) => handleFilterChange(setFilterCamera)({ value: e.value === '__all__' ? '' : String(e.value) })}
+                        width={200}
+                        menuMaxHeight={200}
+                      />
+                      <Select
+                        value={filterMediaType || '__all__'}
+                        options={[
+                          { value: '__all__', label: 'Type' },
+                          { value: 'photo', label: 'Photo' },
+                          { value: 'video', label: 'Video' }
+                        ]}
+                        onChange={(e) => handleFilterChange(setFilterMediaType)({ value: e.value === '__all__' ? '' : String(e.value) })}
+                        width={100}
+                        menuMaxHeight={160}
+                      />
+                      <Select
+                        value={filterHasGps || '__all__'}
+                        options={[
+                          { value: '__all__', label: 'Location' },
+                          { value: 'true', label: 'Has GPS' },
+                          { value: 'false', label: 'No GPS' }
+                        ]}
+                        onChange={(e) => handleFilterChange(setFilterHasGps)({ value: e.value === '__all__' ? '' : String(e.value) })}
+                        width={120}
+                        menuMaxHeight={160}
+                      />
+                      <Select
+                        value={filterAgent || '__all__'}
+                        options={[
+                          { value: '__all__', label: 'Storage' },
+                          ...filterOptions.agents.map(a => ({ value: a, label: a }))
+                        ]}
+                        onChange={(e) => handleFilterChange(setFilterAgent)({ value: e.value === '__all__' ? '' : String(e.value) })}
+                        width={130}
+                        menuMaxHeight={200}
+                      />
+                      {hasActiveFilters && (
+                        <Button size='sm' onClick={handleClearFilters}>Clear</Button>
+                      )}
+                    </div>
+                  </fieldset>
+                  <div style={{ marginBottom: '6px', fontSize: '12px' }}>
+                    Showing {captures.length} files {hasActiveFilters ? '(filtered)' : ''} — Scroll to load more
                   </div>
                   <ScrollView style={{ flexGrow: 1, width: '100%', backgroundColor: '#fff', paddingTop: '10px' }}>
                     <div style={{ 
@@ -206,7 +365,9 @@ function App() {
                                 {pic.fileName}
                               </div>
                               {displayDate && <div style={{ fontSize: '10px', color: '#666', marginTop: '2px' }}>{displayDate}</div>}
-                              {pic.agentId && pic.agentId !== 'local' && <div style={{ fontSize: '10px', color: '#000080', marginTop: '2px' }}>☁ Node: {pic.agentId.substring(0,8)}</div>}
+                              {pic.cameraModel && <div style={{ fontSize: '10px', color: '#444', marginTop: '1px' }}>{pic.cameraModel}</div>}
+                              {pic.latitude != null && pic.longitude != null && <div style={{ fontSize: '10px', color: '#006400', marginTop: '1px' }}>GPS: {pic.latitude.toFixed(4)}, {pic.longitude.toFixed(4)}</div>}
+                              {pic.agentId && pic.agentId !== 'local' && <div style={{ fontSize: '10px', color: '#000080', marginTop: '2px' }}>Node: {pic.agentId.substring(0,8)}</div>}
                             </div>
                           );
                         })}

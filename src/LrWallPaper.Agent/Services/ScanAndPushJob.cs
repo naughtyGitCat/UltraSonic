@@ -1,6 +1,9 @@
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
+using MetadataExtractor.Formats.Exif;
+using MetadataExtractor.Formats.QuickTime;
 
 namespace LrWallPaper.Agent.Services;
 
@@ -107,7 +110,9 @@ public class ScanAndPushJob : BackgroundService
                             AgentId = agentId,
                             FileSize = exif.FileSize ?? new FileInfo(filePath).Length,
                             FileMD5 = md5,
-                            CaptureTime = exif.PhotoDateTime ?? File.GetLastWriteTime(filePath)
+                            CaptureTime = exif.PhotoDateTime ?? File.GetLastWriteTime(filePath),
+                            Latitude = exif.Latitude,
+                            Longitude = exif.Longitude
                         });
 
                         // Flush in chunks of 100
@@ -189,10 +194,31 @@ public class ScanAndPushJob : BackgroundService
     {
         try
         {
+            var ext = Path.GetExtension(file).ToLowerInvariant();
             var directories = MetadataExtractor.ImageMetadataReader.ReadMetadata(file);
+
+            if (ext is ".mov" or ".mp4")
+            {
+                var qtMeta = directories.OfType<QuickTimeMetadataHeaderDirectory>().FirstOrDefault();
+                var qtTrack = directories.OfType<QuickTimeTrackHeaderDirectory>().FirstOrDefault();
+                var fileMeta2 = directories.OfType<MetadataExtractor.Formats.FileSystem.FileMetadataDirectory>().FirstOrDefault();
+                var (qtLat, qtLng) = ParseQuickTimeGps(qtMeta);
+                return new ExifResult
+                {
+                    CameraMaker = qtMeta?.GetDescription(QuickTimeMetadataHeaderDirectory.TagMake),
+                    CameraModel = qtMeta?.GetDescription(QuickTimeMetadataHeaderDirectory.TagModel),
+                    PhotoDateTime = ParseQuickTimeDate(qtMeta, qtTrack, fileMeta2),
+                    FileSize = ParseFileSize(fileMeta2?.GetDescription(MetadataExtractor.Formats.FileSystem.FileMetadataDirectory.TagFileSize)),
+                    Latitude = qtLat,
+                    Longitude = qtLng
+                };
+            }
+
             var ifd0 = directories.FirstOrDefault(d => d.Name == "Exif IFD0");
             var subIfd = directories.FirstOrDefault(d => d.Name == "Exif SubIFD");
             var fileMeta = directories.FirstOrDefault(d => d.Name == "File");
+            var gpsDir = directories.OfType<GpsDirectory>().FirstOrDefault();
+            var geoLocation = gpsDir?.GetGeoLocation();
 
             return new ExifResult
             {
@@ -200,7 +226,9 @@ public class ScanAndPushJob : BackgroundService
                 CameraModel = ifd0?.Tags.FirstOrDefault(t => t.Name == "Model")?.Description,
                 LensModel = subIfd?.Tags.FirstOrDefault(t => t.Name == "Lens Model")?.Description,
                 PhotoDateTime = ParseExifDate(ifd0?.Tags.FirstOrDefault(t => t.Name == "Date/Time")?.Description),
-                FileSize = ParseFileSize(fileMeta?.Tags.FirstOrDefault(t => t.Name == "File Size")?.Description)
+                FileSize = ParseFileSize(fileMeta?.Tags.FirstOrDefault(t => t.Name == "File Size")?.Description),
+                Latitude = geoLocation?.Latitude,
+                Longitude = geoLocation?.Longitude
             };
         }
         catch
@@ -226,6 +254,44 @@ public class ScanAndPushJob : BackgroundService
         return null;
     }
 
+    private static DateTime? ParseQuickTimeDate(
+        QuickTimeMetadataHeaderDirectory? qtMeta,
+        QuickTimeTrackHeaderDirectory? qtTrack,
+        MetadataExtractor.Formats.FileSystem.FileMetadataDirectory? fileMeta)
+    {
+        try
+        {
+            var metaDate = qtMeta?.GetDescription(QuickTimeMetadataHeaderDirectory.TagCreationDate);
+            if (!string.IsNullOrEmpty(metaDate))
+                return DateTime.ParseExact(metaDate, "ddd MMM dd HH:mm:ss zzz yyyy",
+                    System.Globalization.CultureInfo.CurrentCulture);
+            var trackDate = qtTrack?.GetDescription(QuickTimeTrackHeaderDirectory.TagCreated);
+            if (!string.IsNullOrEmpty(trackDate))
+                return DateTime.ParseExact(trackDate, "ddd MMM dd HH:mm:ss yyyy",
+                    System.Globalization.CultureInfo.CurrentCulture).ToLocalTime();
+            var fileDate = fileMeta?.GetDescription(MetadataExtractor.Formats.FileSystem.FileMetadataDirectory.TagFileModifiedDate);
+            if (!string.IsNullOrEmpty(fileDate))
+                return DateTime.ParseExact(fileDate, "ddd MMM dd HH:mm:ss zzz yyyy",
+                    System.Globalization.CultureInfo.CurrentCulture);
+        }
+        catch { }
+        return null;
+    }
+
+    private static (double? lat, double? lng) ParseQuickTimeGps(QuickTimeMetadataHeaderDirectory? qtMeta)
+    {
+        try
+        {
+            var raw = qtMeta?.GetDescription(QuickTimeMetadataHeaderDirectory.TagGpsLocation);
+            if (string.IsNullOrEmpty(raw)) return (null, null);
+            var matches = Regex.Matches(raw, @"[+\-]\d+(\.\d+)?");
+            if (matches.Count >= 2)
+                return (double.Parse(matches[0].Value), double.Parse(matches[1].Value));
+        }
+        catch { }
+        return (null, null);
+    }
+
     private record ExifResult
     {
         public string? CameraMaker { get; init; }
@@ -233,5 +299,7 @@ public class ScanAndPushJob : BackgroundService
         public string? LensModel { get; init; }
         public DateTime? PhotoDateTime { get; init; }
         public long? FileSize { get; init; }
+        public double? Latitude { get; init; }
+        public double? Longitude { get; init; }
     }
 }

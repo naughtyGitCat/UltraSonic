@@ -35,6 +35,10 @@ namespace LrWallPaper.Services
         public string FileMD5 { get; set; }
         [Column("capture_time")]
         public DateTime CaptureTime { get; set; }
+        [Column("latitude")]
+        public double? Latitude { get; set; }
+        [Column("longitude")]
+        public double? Longitude { get; set; }
         [Column("create_time")]
         public DateTime CreateTime { get; set; }
         [Column("update_time")]
@@ -86,35 +90,31 @@ namespace LrWallPaper.Services
 
             try { _database.Execute("ALTER TABLE file_info ADD COLUMN agent_id TEXT NULL;"); } catch {}
             try { _database.Execute("UPDATE file_info SET agent_id = 'local' WHERE agent_id IS NULL;"); } catch {}
+            try { _database.Execute("ALTER TABLE file_info ADD COLUMN latitude REAL NULL;"); } catch {}
+            try { _database.Execute("ALTER TABLE file_info ADD COLUMN longitude REAL NULL;"); } catch {}
         }
 
         public async Task SaveFileMD5Async(FileMD5Entity file) 
         {
-            var sql = $"""
-                INSERT OR REPLACE INTO 
-                file_info (fullpath,filepath,filename,camera_maker,camera_model,lens_model,agent_id,file_size,file_md5,capture_time,create_time,update_time)
-                VALUES ('{file.FileFullPath}', '{file.FilePath}', '{file.FileName}','{file.CameraMaker}', '{file.CameraModel}', '{file.LensModel}','{file.AgentId}','{file.FileSize}', '{file.FileMD5}','{file.CaptureTime:yyyy-MM-dd HH:mm:ss}', '{DateTime.Now:yyyy-MM-dd HH:mm:ss}',  '{DateTime.Now:yyyy-MM-dd HH:mm:ss}')
-
-                """;
-            _logger.LogInformation(file.ToString());
-            _logger.LogInformation( sql );
             var pSQL = """
-                               INSERT OR REPLACE INTO 
-                                file_info 
-                                (fullpath,filepath,filename,camera_maker,camera_model,lens_model,agent_id,file_size,file_md5,capture_time,create_time,update_time)
-                                VALUES 
+                               INSERT OR REPLACE INTO
+                                file_info
+                                (fullpath,filepath,filename,camera_maker,camera_model,lens_model,agent_id,file_size,file_md5,capture_time,latitude,longitude,create_time,update_time)
+                                VALUES
                                 (
-                                    @fullpath, 
-                                    @filepath, 
+                                    @fullpath,
+                                    @filepath,
                                     @filename,
-                                    @camera_maker, 
-                                    @camera_model, 
+                                    @camera_maker,
+                                    @camera_model,
                                     @lens_model,
                                     @agent_id,
-                                    @file_size, 
+                                    @file_size,
                                     @file_md5,
-                                    @capture_time, 
-                                    @create_time,  
+                                    @capture_time,
+                                    @latitude,
+                                    @longitude,
+                                    @create_time,
                                     @update_time
                                 )
                 """;
@@ -139,6 +139,8 @@ namespace LrWallPaper.Services
             cmd.Parameters.Add(new SqliteParameter("@file_size", file.FileSize==0?(object)0:file.FileSize));
             cmd.Parameters.Add(new SqliteParameter("@file_md5", file.FileMD5));
             cmd.Parameters.Add(new SqliteParameter("@capture_time", $"{file.CaptureTime:yyyy-MM-dd HH:mm:ss}"));
+            cmd.Parameters.Add(new SqliteParameter("@latitude", file.Latitude.HasValue ? file.Latitude.Value : DBNull.Value));
+            cmd.Parameters.Add(new SqliteParameter("@longitude", file.Longitude.HasValue ? file.Longitude.Value : DBNull.Value));
             cmd.Parameters.Add(new SqliteParameter("@create_time", $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}"));
             cmd.Parameters.Add(new SqliteParameter("@update_time", $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}"));
 
@@ -237,6 +239,60 @@ namespace LrWallPaper.Services
             var since = DateTime.Now - offset;
             var sql = "SELECT * FROM file_info WHERE capture_time >= @0 ORDER BY capture_time DESC";
             return await _database.FetchAsync<FileMD5Entity>(sql, since.ToString("yyyy-MM-dd HH:mm:ss"));
+        }
+
+        public async Task<List<FileMD5Entity>> GetFilteredCapturesAsync(
+            int page, int pageSize,
+            int? year = null, int? month = null, int? day = null,
+            string? cameraMaker = null, string? cameraModel = null,
+            string? mediaType = null, string? agentId = null,
+            bool? hasGps = null)
+        {
+            var conditions = new List<string>();
+            var parameters = new List<object>();
+            int idx = 0;
+
+            if (year.HasValue) { conditions.Add($"strftime('%Y', capture_time) = @{idx}"); parameters.Add(year.Value.ToString()); idx++; }
+            if (month.HasValue) { conditions.Add($"strftime('%m', capture_time) = @{idx}"); parameters.Add(month.Value.ToString("D2")); idx++; }
+            if (day.HasValue) { conditions.Add($"strftime('%d', capture_time) = @{idx}"); parameters.Add(day.Value.ToString("D2")); idx++; }
+            if (!string.IsNullOrEmpty(cameraMaker)) { conditions.Add($"camera_maker = @{idx}"); parameters.Add(cameraMaker); idx++; }
+            if (!string.IsNullOrEmpty(cameraModel)) { conditions.Add($"camera_model = @{idx}"); parameters.Add(cameraModel); idx++; }
+            if (!string.IsNullOrEmpty(agentId)) { conditions.Add($"agent_id = @{idx}"); parameters.Add(agentId); idx++; }
+
+            if (mediaType == "photo")
+                conditions.Add("lower(filename) NOT LIKE '%.mp4' AND lower(filename) NOT LIKE '%.mov' AND lower(filename) NOT LIKE '%.avi' AND lower(filename) NOT LIKE '%.mkv' AND lower(filename) NOT LIKE '%.mts'");
+            else if (mediaType == "video")
+                conditions.Add("(lower(filename) LIKE '%.mp4' OR lower(filename) LIKE '%.mov' OR lower(filename) LIKE '%.avi' OR lower(filename) LIKE '%.mkv' OR lower(filename) LIKE '%.mts')");
+
+            if (hasGps == true) conditions.Add("latitude IS NOT NULL AND longitude IS NOT NULL");
+            else if (hasGps == false) conditions.Add("(latitude IS NULL OR longitude IS NULL)");
+
+            var where = conditions.Count > 0 ? "WHERE " + string.Join(" AND ", conditions) : "";
+            var sql = $"SELECT * FROM file_info {where} ORDER BY capture_time DESC LIMIT @{idx} OFFSET @{idx + 1}";
+            parameters.Add(pageSize);
+            parameters.Add((page - 1) * pageSize);
+
+            return await _database.FetchAsync<FileMD5Entity>(sql, parameters.ToArray());
+        }
+
+        public async Task<object> GetFilterOptionsAsync()
+        {
+            var years = await _database.FetchAsync<string>(
+                "SELECT DISTINCT strftime('%Y', capture_time) FROM file_info WHERE capture_time IS NOT NULL ORDER BY 1 DESC");
+            var cameras = await _database.FetchAsync<FileMD5Entity>(
+                "SELECT DISTINCT camera_maker, camera_model FROM file_info WHERE camera_maker != '' AND camera_model != '' ORDER BY camera_maker, camera_model");
+            var agents = await _database.FetchAsync<string>(
+                "SELECT DISTINCT agent_id FROM file_info WHERE agent_id IS NOT NULL ORDER BY agent_id");
+            var hasGpsCount = await _database.ExecuteScalarAsync<int>(
+                "SELECT COUNT(1) FROM file_info WHERE latitude IS NOT NULL AND longitude IS NOT NULL");
+
+            return new
+            {
+                Years = years,
+                Cameras = cameras.Select(c => new { c.CameraMaker, c.CameraModel }).Distinct().ToList(),
+                Agents = agents,
+                HasGpsData = hasGpsCount > 0
+            };
         }
 
         /// <summary>

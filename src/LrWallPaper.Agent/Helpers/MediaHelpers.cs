@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
+using MetadataExtractor.Formats.Exif;
 using MetadataExtractor.Formats.FileSystem;
 using MetadataExtractor.Formats.QuickTime;
 
@@ -12,6 +14,8 @@ public record MediaExifResult
     public string? LensModel { get; init; }
     public DateTime? PhotoDateTime { get; init; }
     public long? FileSize { get; init; }
+    public double? Latitude { get; init; }
+    public double? Longitude { get; init; }
 }
 
 public static class MediaHelpers
@@ -49,19 +53,24 @@ public static class MediaHelpers
                 var qtTrack = directories.OfType<QuickTimeTrackHeaderDirectory>().FirstOrDefault();
                 var fileMeta = directories.OfType<FileMetadataDirectory>().FirstOrDefault();
 
+                var (qtLat, qtLng) = ParseQuickTimeGps(qtMeta);
                 return new MediaExifResult
                 {
                     CameraMaker = qtMeta?.GetDescription(QuickTimeMetadataHeaderDirectory.TagMake),
                     CameraModel = qtMeta?.GetDescription(QuickTimeMetadataHeaderDirectory.TagModel),
                     PhotoDateTime = ParseQuickTimeDate(qtMeta, qtTrack, fileMeta),
                     LensModel = null,
-                    FileSize = ParseFileSize(fileMeta?.GetDescription(FileMetadataDirectory.TagFileSize))
+                    FileSize = ParseFileSize(fileMeta?.GetDescription(FileMetadataDirectory.TagFileSize)),
+                    Latitude = qtLat,
+                    Longitude = qtLng
                 };
             }
 
             var ifd0 = directories.FirstOrDefault(d => d.Name == "Exif IFD0");
             var subIfd = directories.FirstOrDefault(d => d.Name == "Exif SubIFD");
             var fileDir = directories.FirstOrDefault(d => d.Name == "File");
+            var gpsDir = directories.OfType<GpsDirectory>().FirstOrDefault();
+            var geoLocation = gpsDir?.GetGeoLocation();
 
             return new MediaExifResult
             {
@@ -69,7 +78,9 @@ public static class MediaHelpers
                 CameraModel = ifd0?.Tags.FirstOrDefault(t => t.Name == "Model")?.Description,
                 LensModel = subIfd?.Tags.FirstOrDefault(t => t.Name == "Lens Model")?.Description,
                 PhotoDateTime = ParseExifDate(ifd0?.Tags.FirstOrDefault(t => t.Name == "Date/Time")?.Description),
-                FileSize = ParseFileSize(fileDir?.Tags.FirstOrDefault(t => t.Name == "File Size")?.Description)
+                FileSize = ParseFileSize(fileDir?.Tags.FirstOrDefault(t => t.Name == "File Size")?.Description),
+                Latitude = geoLocation?.Latitude,
+                Longitude = geoLocation?.Longitude
             };
         }
         catch
@@ -119,5 +130,20 @@ public static class MediaHelpers
         if (string.IsNullOrEmpty(raw)) return null;
         if (long.TryParse(raw.Split(' ').First(), out var size)) return size;
         return null;
+    }
+
+    private static (double? lat, double? lng) ParseQuickTimeGps(QuickTimeMetadataHeaderDirectory? qtMeta)
+    {
+        try
+        {
+            var raw = qtMeta?.GetDescription(QuickTimeMetadataHeaderDirectory.TagGpsLocation);
+            if (string.IsNullOrEmpty(raw)) return (null, null);
+
+            var matches = Regex.Matches(raw, @"[+\-]\d+(\.\d+)?");
+            if (matches.Count >= 2)
+                return (double.Parse(matches[0].Value), double.Parse(matches[1].Value));
+        }
+        catch { }
+        return (null, null);
     }
 }

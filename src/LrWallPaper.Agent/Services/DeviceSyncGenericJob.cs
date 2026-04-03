@@ -180,7 +180,9 @@ public class DeviceSyncGenericJob : BackgroundService
                 AgentId = agentId,
                 FileSize = exif.FileSize ?? size,
                 FileMD5 = md5,
-                CaptureTime = captureTime
+                CaptureTime = captureTime,
+                Latitude = exif.Latitude,
+                Longitude = exif.Longitude
             });
         }
         catch (Exception ex)

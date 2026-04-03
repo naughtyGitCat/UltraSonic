@@ -165,7 +165,9 @@ public class DeviceSyncAppleJob : BackgroundService
                             AgentId = agentId,
                             FileSize = exif.FileSize ?? new FileInfo(targetFile).Length,
                             FileMD5 = md5,
-                            CaptureTime = exif.PhotoDateTime.Value
+                            CaptureTime = exif.PhotoDateTime.Value,
+                            Latitude = exif.Latitude,
+                            Longitude = exif.Longitude
                         });
 
                         if (batch.Count >= 20)
