@@ -6,6 +6,7 @@ using Serilog.Events;
 using Microsoft.AspNetCore.Hosting;
 
 using LrWallPaper.Jobs;
+using LrWallPaper.Models;
 namespace LrWallPaper;
 class Program
 {
@@ -21,6 +22,9 @@ class Program
             .CreateLogger();
         var builder = WebApplication.CreateBuilder(args);
         
+        var ultraSonicConfig = builder.Configuration.GetSection("UltraSonic").Get<UltraSonicConfig>() ?? new UltraSonicConfig();
+        builder.Services.AddSingleton(ultraSonicConfig);
+
         // Add services to the container.
         builder.Services.AddSingleton<ICustomSQLiteFactory, CustomSQLiteFactory>();
         // builder.Services.AddHostedService<BusinessJob>();

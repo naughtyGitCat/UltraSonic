@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using LrWallPaper.Common;
 using LrWallPaper.Helpers;
+using LrWallPaper.Models;
 using Microsoft.AspNetCore.Routing.Constraints;
 using Newtonsoft.Json;
 using Directory=System.IO.Directory;
@@ -14,11 +15,13 @@ namespace LrWallPaper.Services
     public class CaptureRawRepository : ICaptureRepository
     {
         private readonly IEnumerable<string> _directories;
+        private readonly IEnumerable<string> _skipDirectories;
         private readonly ILogger<CaptureRawRepository> _logger;
-        public CaptureRawRepository(ILogger<CaptureRawRepository> logger)
+        public CaptureRawRepository(ILogger<CaptureRawRepository> logger, UltraSonicConfig config)
         {
             _logger = logger;
-            _directories = ["D:\\"];                  
+            _directories = config.LocalScan.RootDirectories;
+            _skipDirectories = config.LocalScan.SkipDirectories;
         }
 
         private bool IsPicture(string fileName)
@@ -42,7 +45,7 @@ namespace LrWallPaper.Services
         {
             foreach (var dir in _directories)
             {
-                var files = FileHelper.GetFilesRecursively(dir, [@"D:\icloud\iCloudDrive", @"D:\扫描文件", @"D:\Twitter的图片"]);
+                var files = FileHelper.GetFilesRecursively(dir, _skipDirectories.ToArray());
                 foreach (var f in files)
                 {
                     if (!IsPicture(f)) continue;

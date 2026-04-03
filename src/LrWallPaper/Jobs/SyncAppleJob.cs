@@ -14,10 +14,12 @@ namespace LrWallPaper.Jobs
     {
         private readonly ILogger<SyncAppleJob> _logger;
         private readonly FileMD5Manager _fileRecordManager;
-        public SyncAppleJob(FileMD5Manager fileMD5Manager,ILogger<SyncAppleJob> logger) 
+        private readonly UltraSonicConfig _config;
+        public SyncAppleJob(FileMD5Manager fileMD5Manager,ILogger<SyncAppleJob> logger, UltraSonicConfig config) 
         {
             _logger = logger;
             _fileRecordManager = fileMD5Manager;
+            _config = config;
         }
         private IEnumerable<RemovableDeviceDO> GetCurrentAppleDevices()
         {
@@ -80,19 +82,19 @@ namespace LrWallPaper.Jobs
                             _logger.LogDebug("file {cf} already exist", file);
                             continue;
                         }
-                        var tmpFile = @$"F:\{filename}";
+                        var tmpFile = Path.Combine(_config.AppleImport.TempDirectory, filename);
                         try
                         {
                             _logger.LogDebug("now pull file {i} from ios to tmp file {t}", file, tmpFile);
                             afc.Pull(file, tmpFile);
-                            var tmpExif = Path.GetExtension(@$"F:\{filename}").ToLower() == ".mov" ? AppleLivePhotoHelper.GetLiveQuickTimeInfo(@$"F:\{filename}") : EXIFHelper.GetEXIFInfo(@$"F:\{filename}");
+                            var tmpExif = Path.GetExtension(tmpFile).ToLower() == ".mov" ? AppleLivePhotoHelper.GetLiveQuickTimeInfo(tmpFile) : EXIFHelper.GetEXIFInfo(tmpFile);
                             if (tmpExif.CameraMaker == "Apple" && tmpExif.CameraModel == iosProductName)
                             {
                                 _logger.LogInformation("this is a picture shot by this phone");
                                 if (tmpExif.PhotoDateTime is null) continue;
-                                var targetFile = Path.Join(@"D:\Photograph", tmpExif.PhotoDateTime.Value.Year.ToString(), $"{tmpExif.PhotoDateTime:yyyy-MM-dd}", filename);
+                                var targetFile = Path.Combine(_config.AppleImport.ArchiveDirectory, tmpExif.PhotoDateTime.Value.Year.ToString(), $"{tmpExif.PhotoDateTime:yyyy-MM-dd}", filename);
                                 _logger.LogDebug("tmpFile: {t}, targetFile: {g}", tmpFile, targetFile);
-                                Directory.CreateDirectory(Path.GetDirectoryName(targetFile));
+                                Directory.CreateDirectory(Path.GetDirectoryName(targetFile)!);
                                 File.Move(tmpFile, targetFile);
                                 var targetMD5 =FileHelper.GetMD5(targetFile);
                                 await _fileRecordManager.SaveFileMD5Async(new FileMD5Entity
