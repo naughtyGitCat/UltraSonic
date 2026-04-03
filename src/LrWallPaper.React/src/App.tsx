@@ -47,6 +47,13 @@ interface Agent {
   endpoint: string;
 }
 
+interface ClusterNode {
+  role: string;
+  nodeKey: string;
+  httpEndpoint: string;
+  status: string;
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState(0);
 
@@ -60,6 +67,9 @@ function App() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [newAgentName, setNewAgentName] = useState('');
   const [newAgentIp, setNewAgentIp] = useState('');
+
+  // Cluster State
+  const [clusterNodes, setClusterNodes] = useState<ClusterNode[]>([]);
 
   const observer = useRef<IntersectionObserver | null>(null);
 
@@ -106,6 +116,7 @@ function App() {
   useEffect(() => {
     if (activeTab === 1) {
       fetchAgents();
+      fetchClusterNodes();
     }
   }, [activeTab]);
 
@@ -113,6 +124,13 @@ function App() {
     fetch('/api/agent')
       .then(res => res.json())
       .then(data => setAgents(data))
+      .catch(console.error);
+  };
+
+  const fetchClusterNodes = () => {
+    fetch('/api/agent/cluster')
+      .then(res => res.json())
+      .then(data => setClusterNodes(data))
       .catch(console.error);
   };
 
@@ -203,7 +221,40 @@ function App() {
               {activeTab === 1 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   <fieldset style={{ border: '2px solid groove', padding: '15px' }}>
-                    <legend>Register New Edge Node</legend>
+                    <legend>SWIM Cluster (Auto-Discovery)</legend>
+                    {clusterNodes.length === 0 ? (
+                      <div style={{ color: '#666', padding: '8px' }}>No peers discovered yet. Nodes on the same LAN will appear automatically.</div>
+                    ) : (
+                      <Table>
+                        <TableHead>
+                          <TableRow>
+                            <TableHeadCell>Role</TableHeadCell>
+                            <TableHeadCell>Node Key</TableHeadCell>
+                            <TableHeadCell>HTTP Endpoint</TableHeadCell>
+                            <TableHeadCell>Status</TableHeadCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {clusterNodes.map((node, idx) => (
+                            <TableRow key={idx}>
+                              <TableDataCell style={{ color: node.role === 'master' ? '#800000' : '#000080', fontWeight: 'bold' }}>
+                                {node.role === 'master' ? 'Master' : 'Agent'}
+                              </TableDataCell>
+                              <TableDataCell>{node.nodeKey}</TableDataCell>
+                              <TableDataCell>{node.httpEndpoint}</TableDataCell>
+                              <TableDataCell style={{ color: '#008000' }}>{node.status}</TableDataCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                    <div style={{ marginTop: '8px' }}>
+                      <Button onClick={fetchClusterNodes}>Refresh</Button>
+                    </div>
+                  </fieldset>
+
+                  <fieldset style={{ border: '2px solid groove', padding: '15px' }}>
+                    <legend>Register New Edge Node (Manual)</legend>
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                       <label>Name:</label>
                       <TextInput 

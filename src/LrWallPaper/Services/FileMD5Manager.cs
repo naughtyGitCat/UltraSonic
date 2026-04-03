@@ -238,5 +238,14 @@ namespace LrWallPaper.Services
             var sql = "SELECT * FROM file_info WHERE capture_time >= @0 ORDER BY capture_time DESC";
             return await _database.FetchAsync<FileMD5Entity>(sql, since.ToString("yyyy-MM-dd HH:mm:ss"));
         }
+
+        /// <summary>
+        /// Returns records updated after the given timestamp (for Master-to-Master incremental sync).
+        /// </summary>
+        public async Task<List<FileMD5Entity>> GetRecordsSinceAsync(DateTime since, int limit = 1000)
+        {
+            var sql = "SELECT * FROM file_info WHERE update_time > @0 ORDER BY update_time ASC LIMIT @1";
+            return await _database.FetchAsync<FileMD5Entity>(sql, since.ToString("yyyy-MM-dd HH:mm:ss"), limit);
+        }
     }
 }

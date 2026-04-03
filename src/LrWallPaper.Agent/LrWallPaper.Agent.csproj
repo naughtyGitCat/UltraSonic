@@ -19,6 +19,10 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="Serilog.AspNetCore" Version="8.0.1" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageReference Include="SlimCluster" Version="0.9.0" />
+    <PackageReference Include="SlimCluster.Membership.Swim" Version="0.9.0" />
+    <PackageReference Include="SlimCluster.Transport.Ip" Version="0.9.0" />
+    <PackageReference Include="SlimCluster.Serialization.Json" Version="0.9.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
   </ItemGroup>
 

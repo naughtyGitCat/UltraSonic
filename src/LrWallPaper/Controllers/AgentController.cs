@@ -8,10 +8,12 @@ namespace LrWallPaper.Controllers;
 public class AgentController : ControllerBase
 {
     private readonly AgentManager _agentManager;
+    private readonly ClusterDiscoveryService _discovery;
 
-    public AgentController(AgentManager agentManager)
+    public AgentController(AgentManager agentManager, ClusterDiscoveryService discovery)
     {
         _agentManager = agentManager;
+        _discovery = discovery;
     }
 
     [HttpGet]
@@ -36,5 +38,21 @@ public class AgentController : ControllerBase
     {
         await _agentManager.DeleteAgentAsync(id);
         return Ok();
+    }
+
+    /// <summary>
+    /// Returns all nodes discovered via SWIM cluster membership.
+    /// </summary>
+    [HttpGet("cluster")]
+    public IActionResult GetClusterNodes()
+    {
+        var peers = _discovery.GetPeers();
+        return Ok(peers.Select(p => new
+        {
+            Role = p.Role.ToString().ToLowerInvariant(),
+            p.NodeKey,
+            p.HttpEndpoint,
+            Status = "online"
+        }));
     }
 }
