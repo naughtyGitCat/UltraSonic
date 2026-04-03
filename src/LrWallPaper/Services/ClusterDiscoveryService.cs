@@ -11,6 +11,7 @@ public class ClusterDiscoveryService : IHostedService, IDisposable
 {
     private readonly IClusterMembership _membership;
     private readonly AgentManager _agentManager;
+    private readonly INotificationService _notification;
     private readonly ILogger<ClusterDiscoveryService> _logger;
     private readonly IConfiguration _configuration;
 
@@ -21,11 +22,13 @@ public class ClusterDiscoveryService : IHostedService, IDisposable
     public ClusterDiscoveryService(
         IClusterMembership membership,
         AgentManager agentManager,
+        INotificationService notification,
         ILogger<ClusterDiscoveryService> logger,
         IConfiguration configuration)
     {
         _membership = membership;
         _agentManager = agentManager;
+        _notification = notification;
         _logger = logger;
         _configuration = configuration;
     }
@@ -63,6 +66,11 @@ public class ClusterDiscoveryService : IHostedService, IDisposable
         _logger.LogInformation("Node joined cluster: {Role} @ {Endpoint} (id={NodeId})",
             info.Role, info.HttpEndpoint, nodeId);
 
+        _ = _notification.SendAsync(
+            "UltraSonic 节点上线",
+            $"{info.Role} [{info.NodeKey}] 已加入集群\n{info.HttpEndpoint}",
+            "cluster");
+
         if (info.Role == ClusterNodeRole.Agent)
         {
             _ = Task.Run(async () =>
@@ -96,6 +104,14 @@ public class ClusterDiscoveryService : IHostedService, IDisposable
         }
 
         _logger.LogInformation("Node left cluster: {NodeId}", nodeId);
+
+        if (info != null)
+        {
+            _ = _notification.SendAsync(
+                "UltraSonic 节点离线",
+                $"{info.Role} [{info.NodeKey}] 已离开集群\n{info.HttpEndpoint}",
+                "cluster");
+        }
 
         if (info?.Role == ClusterNodeRole.Agent)
         {

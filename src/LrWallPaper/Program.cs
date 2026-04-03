@@ -40,6 +40,8 @@ class Program
         // builder.Services.AddHostedService<SyncAppleJob>(); // moved to Agent
         // builder.Services.AddHostedService<SyncGenericDeviceJob>(); // moved to Agent
         builder.Services.AddHttpClient("ClusterClient");
+        builder.Services.AddHttpClient("BarkClient");
+        builder.Services.AddSingleton<INotificationService, BarkNotificationService>();
         builder.Services.AddSingleton<MasterReplicationService>();
         builder.Services.AddHostedService<MasterReplicationJob>();
         builder.Services.AddSingleton<MasterTrayIconManager>();
