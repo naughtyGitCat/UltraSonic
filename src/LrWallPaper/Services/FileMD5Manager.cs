@@ -1,5 +1,5 @@
 using NPoco;
-using System.Data.SQLite;
+using Microsoft.Data.Sqlite;
 using System.Security.Cryptography;
 using System.Data.Common;
 using Newtonsoft.Json;
@@ -50,7 +50,7 @@ namespace LrWallPaper.Services
             _logger = logger;
             var dbPath = Path.Combine(AppContext.BaseDirectory, "ultrasonic.db");
             _connectionString = $"Data Source={dbPath}";
-            _database = new Database(_connectionString, DatabaseType.SQLite, SQLiteFactory.Instance);
+            _database = new Database(_connectionString, DatabaseType.SQLite, SqliteFactory.Instance);
             PrepareTable();
         }
 
@@ -124,25 +124,24 @@ namespace LrWallPaper.Services
                {
                    throw new Exception("conn is null");
                }*/
-            using var conn = new SQLiteConnection(_connectionString);
+            using var conn = new SqliteConnection(_connectionString);
              conn.Open();
             // var cmd = _database.CreateCommand(conn, commandType: System.Data.CommandType.Text, pSQL);
             var cmd = conn.CreateCommand();
             cmd.CommandText = pSQL;
-            cmd.Parameters.Add(new SQLiteParameter("@fullpath", file.FileFullPath));
-            cmd.Parameters.Add(new SQLiteParameter("@filepath", file.FilePath));
-            cmd.Parameters.Add(new SQLiteParameter("@filename", file.FileName));
-            cmd.Parameters.Add(new SQLiteParameter("@camera_maker", file.CameraMaker));
-            cmd.Parameters.Add(new SQLiteParameter("@camera_model", file.CameraModel));
-            cmd.Parameters.Add(new SQLiteParameter("@lens_model", file.LensModel));
-            cmd.Parameters.Add(new SQLiteParameter("@agent_id", file.AgentId ?? "local"));
-            cmd.Parameters.Add(new SQLiteParameter("@file_size", file.FileSize==0?(object)0:file.FileSize));
-            cmd.Parameters.Add(new SQLiteParameter("@file_md5", file.FileMD5));
-            cmd.Parameters.Add(new SQLiteParameter("@capture_time", $"{file.CaptureTime:yyyy-MM-dd HH:mm:ss}"));
-            cmd.Parameters.Add(new SQLiteParameter("@create_time", $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}"));
-            cmd.Parameters.Add(new SQLiteParameter("@update_time", $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}"));
+            cmd.Parameters.Add(new SqliteParameter("@fullpath", file.FileFullPath));
+            cmd.Parameters.Add(new SqliteParameter("@filepath", file.FilePath));
+            cmd.Parameters.Add(new SqliteParameter("@filename", file.FileName));
+            cmd.Parameters.Add(new SqliteParameter("@camera_maker", file.CameraMaker));
+            cmd.Parameters.Add(new SqliteParameter("@camera_model", file.CameraModel));
+            cmd.Parameters.Add(new SqliteParameter("@lens_model", file.LensModel));
+            cmd.Parameters.Add(new SqliteParameter("@agent_id", file.AgentId ?? "local"));
+            cmd.Parameters.Add(new SqliteParameter("@file_size", file.FileSize==0?(object)0:file.FileSize));
+            cmd.Parameters.Add(new SqliteParameter("@file_md5", file.FileMD5));
+            cmd.Parameters.Add(new SqliteParameter("@capture_time", $"{file.CaptureTime:yyyy-MM-dd HH:mm:ss}"));
+            cmd.Parameters.Add(new SqliteParameter("@create_time", $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}"));
+            cmd.Parameters.Add(new SqliteParameter("@update_time", $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}"));
 
-            cmd.VerifyOnly();
             await cmd.ExecuteNonQueryAsync();
             // await _database.ExecuteAsync(MySqlConnector.MySqlHelper.EscapeString(sql));
         }
