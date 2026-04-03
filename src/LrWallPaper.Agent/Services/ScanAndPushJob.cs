@@ -13,6 +13,7 @@ public class ScanAndPushJob : BackgroundService
 {
     private readonly ILogger<ScanAndPushJob> _logger;
     private readonly IConfiguration _configuration;
+    private readonly AgentState _agentState;
     private readonly HttpClient _httpClient = new();
 
     private static readonly HashSet<string> DefaultExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -22,10 +23,11 @@ public class ScanAndPushJob : BackgroundService
         ".mp4", ".mov", ".avi", ".mkv", ".mts"
     };
 
-    public ScanAndPushJob(ILogger<ScanAndPushJob> logger, IConfiguration configuration)
+    public ScanAndPushJob(ILogger<ScanAndPushJob> logger, IConfiguration configuration, AgentState agentState)
     {
         _logger = logger;
         _configuration = configuration;
+        _agentState = agentState;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -33,27 +35,34 @@ public class ScanAndPushJob : BackgroundService
         // Wait briefly for the web host to fully start
         await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken);
 
-        var agentId = _configuration["Agent:AgentId"];
-        var masterEndpoint = _configuration["Agent:MasterEndpoint"] ?? "http://localhost:5281";
-        var scanPaths = _configuration.GetSection("Agent:ScanPaths").Get<string[]>() ?? [];
-        var intervalMinutes = _configuration.GetValue("Agent:ScanIntervalMinutes", 60);
-        var supportedExts = _configuration.GetSection("Agent:SupportedExtensions").Get<string[]>();
-        var extensions = supportedExts != null && supportedExts.Length > 0
-            ? new HashSet<string>(supportedExts, StringComparer.OrdinalIgnoreCase)
-            : DefaultExtensions;
-
-        if (string.IsNullOrEmpty(agentId))
-        {
-            agentId = Guid.NewGuid().ToString();
-            _logger.LogWarning("No AgentId configured — generated ephemeral ID: {Id}. " +
-                               "Set Agent:AgentId in appsettings.json for persistence.", agentId);
-        }
-
-        _logger.LogInformation("Agent {Id} starting. Master={Master}, Paths={Paths}, Interval={Min}m",
-            agentId, masterEndpoint, string.Join(";", scanPaths), intervalMinutes);
-
         while (!stoppingToken.IsCancellationRequested)
         {
+            if (!_agentState.IsScanningEnabled)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(15), stoppingToken);
+                continue;
+            }
+
+            // Read configuration dynamically on each iteration so changes in appsettings.json apply immediately
+            var agentId = _configuration["Agent:AgentId"];
+            var masterEndpoint = _configuration["Agent:MasterEndpoint"] ?? "http://localhost:5281";
+            var scanPaths = _configuration.GetSection("Agent:ScanPaths").Get<string[]>() ?? [];
+            var intervalMinutes = _configuration.GetValue("Agent:ScanIntervalMinutes", 60);
+            var supportedExts = _configuration.GetSection("Agent:SupportedExtensions").Get<string[]>();
+            var extensions = supportedExts != null && supportedExts.Length > 0
+                ? new HashSet<string>(supportedExts, StringComparer.OrdinalIgnoreCase)
+                : DefaultExtensions;
+
+            if (string.IsNullOrEmpty(agentId))
+            {
+                agentId = Guid.NewGuid().ToString();
+                _logger.LogWarning("No AgentId configured — generated ephemeral ID: {Id}. " +
+                                   "Set Agent:AgentId in appsettings.json for persistence.", agentId);
+            }
+
+            _logger.LogInformation("Agent {Id} starting scan. Master={Master}, Paths={Paths}, Interval={Min}m",
+                agentId, masterEndpoint, string.Join(";", scanPaths), intervalMinutes);
+
             foreach (var scanPath in scanPaths)
             {
                 if (!Directory.Exists(scanPath))
