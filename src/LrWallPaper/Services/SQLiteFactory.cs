@@ -2,6 +2,7 @@
 using System.IO;
 using System.Data.SQLite;
 using NPoco;
+using LrWallPaper.Models;
 namespace LrWallPaper.Services;
 
 public interface ICustomSQLiteFactory
@@ -12,10 +13,10 @@ public interface ICustomSQLiteFactory
 
 public class CustomSQLiteFactory : ICustomSQLiteFactory
 {
-    private const string _db = @$"Data Source=D:\…„”∞\Lightroom\Lightroom Catalog-v11.lrcat;Mode=ReadOnly";
-    public CustomSQLiteFactory()
+    private readonly string _db;
+    public CustomSQLiteFactory(UltraSonicConfig config)
     {
-
+        _db = @$"Data Source={config.Lightroom.CatalogPath};Mode=ReadOnly";
     }
 
     public SQLiteConnection GetConnection()
@@ -38,9 +39,15 @@ public record TempDBInfo
 public class LightroomDatabaseService : ICustomSQLiteFactory
 {
     private string _tempDBPath = "";
-    private IEnumerable<string> _tempPaths;
+    private IEnumerable<string> _tempPaths = new List<string>();
     private DateTime _copyTime = DateTime.MinValue;
-    private const string _dbPath = @$"D:\…„”∞\Lightroom\Lightroom Catalog-v11.lrcat";
+    private readonly string _dbPath;
+
+    public LightroomDatabaseService(UltraSonicConfig config)
+    {
+        _dbPath = config.Lightroom.CatalogPath;
+    }
+
 
     private string NewTempDBPath()
     {
