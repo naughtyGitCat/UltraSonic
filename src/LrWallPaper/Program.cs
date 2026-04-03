@@ -31,6 +31,10 @@ class Program
         builder.Services.AddHostedService<SyncAppleJob>();
         builder.Services.AddHostedService<SyncGenericDeviceJob>();
         builder.Services.AddHostedService<PictureMD5Job>();
+        builder.Services.AddHttpClient("ClusterClient");
+        builder.Services.AddSingleton<MasterReplicationService>();
+        builder.Services.AddHostedService<MasterReplicationJob>();
+        
         builder.Services.AddControllers();
         // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
         builder.Services.AddEndpointsApiExplorer();
