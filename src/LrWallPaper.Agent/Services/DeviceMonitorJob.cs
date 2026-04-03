@@ -158,7 +158,7 @@ public class DeviceMonitorJob : BackgroundService
                 ));
             }
         }
-        catch { }
+        catch (Exception ex) { _logger.LogDebug(ex, "Failed to enumerate Apple devices"); }
         return result;
     }
 
@@ -177,7 +177,7 @@ public class DeviceMonitorJob : BackgroundService
                 result.Add((id, new DeviceInfo(id, label, "可移动存储")));
             }
         }
-        catch { }
+        catch (Exception ex) { _logger.LogDebug(ex, "Failed to enumerate removable drives"); }
         return result;
     }
 

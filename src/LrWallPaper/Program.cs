@@ -108,7 +108,7 @@ class Program
         // SPA fallback: any unmatched route returns index.html
         app.MapFallbackToFile("index.html");
 
-        app.MapGet("/api/image", async (string path, string? agentId, AgentManager agentManager) =>
+        app.MapGet("/api/image", async (string path, string? agentId, AgentManager agentManager, IHttpClientFactory httpClientFactory) =>
         {
             if (string.IsNullOrEmpty(path)) return Results.NotFound();
 
@@ -133,13 +133,13 @@ class Program
                 if (!System.IO.File.Exists(path)) return Results.NotFound();
                 return Results.File(path, contentType);
             }
-            
+
             // Remote agent fetch
             var agents = await agentManager.GetAllAgentsAsync();
             var agent = agents.FirstOrDefault(a => a.Id == agentId);
             if (agent == null || string.IsNullOrEmpty(agent.Endpoint)) return Results.NotFound();
 
-            var client = new HttpClient();
+            var client = httpClientFactory.CreateClient("ClusterClient");
             try {
                 var stream = await client.GetStreamAsync($"{agent.Endpoint.TrimEnd('/')}/api/agent/image?path={Uri.EscapeDataString(path)}");
                 return Results.File(stream, contentType);

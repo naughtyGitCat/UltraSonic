@@ -119,6 +119,9 @@ public class MasterSyncController : ControllerBase
         {
             var url = $"{agent.Endpoint.TrimEnd('/')}/api/agent/sync/trigger";
             var response = await client.PostAsync(url, null);
+            if (!response.IsSuccessStatusCode)
+                return StatusCode((int)response.StatusCode,
+                    new { Error = $"Agent returned {response.StatusCode}" });
             return Ok(new { Status = "triggered", AgentId = agentId, AgentEndpoint = agent.Endpoint });
         }
         catch (Exception ex)
