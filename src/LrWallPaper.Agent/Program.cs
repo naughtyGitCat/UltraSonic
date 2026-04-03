@@ -20,6 +20,8 @@ builder.Services.AddSerilog();
 builder.Services.AddSingleton<AgentState>();
 builder.Services.AddSingleton<TrayIconManager>();
 builder.Services.AddHostedService<ScanAndPushJob>();
+builder.Services.AddHostedService<DeviceSyncAppleJob>();
+builder.Services.AddHostedService<DeviceSyncGenericJob>();
 
 var app = builder.Build();
 

@@ -224,5 +224,19 @@ namespace LrWallPaper.Services
             var sql = "SELECT * FROM file_info ORDER BY capture_time DESC LIMIT @0 OFFSET @1";
             return await _database.FetchAsync<FileMD5Entity>(sql, pageSize, (page - 1) * pageSize);
         }
+
+        public async Task<bool> FileExistsAsync(string filename, long fileSize)
+        {
+            var sql = "SELECT COUNT(1) FROM file_info WHERE filename = @0 AND file_size = @1";
+            var count = await _database.ExecuteScalarAsync<int>(sql, filename, fileSize);
+            return count > 0;
+        }
+
+        public async Task<List<FileMD5Entity>> GetRecentCapturesAsync(TimeSpan offset)
+        {
+            var since = DateTime.Now - offset;
+            var sql = "SELECT * FROM file_info WHERE capture_time >= @0 ORDER BY capture_time DESC";
+            return await _database.FetchAsync<FileMD5Entity>(sql, since.ToString("yyyy-MM-dd HH:mm:ss"));
+        }
     }
 }

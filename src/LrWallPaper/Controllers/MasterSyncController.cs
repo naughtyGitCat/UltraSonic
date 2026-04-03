@@ -16,6 +16,14 @@ public class MasterSyncController : ControllerBase
         _replicationService = replicationService;
     }
 
+    [HttpGet("file-exists")]
+    public async Task<IActionResult> FileExists([FromQuery] string filename, [FromQuery] long size)
+    {
+        if (string.IsNullOrEmpty(filename)) return BadRequest();
+        var exists = await _md5Manager.FileExistsAsync(filename, size);
+        return Ok(new { exists });
+    }
+
     [HttpPost("sync")]
     public async Task<IActionResult> Sync([FromBody] List<FileMD5Entity> captures, [FromQuery] bool is_republished = false)
     {
