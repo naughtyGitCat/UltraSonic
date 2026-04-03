@@ -1,82 +1,69 @@
 # UltraSonic
 
-分布式本地照片 / RAW 管理平台。通过 **Master-Agent** 架构，将分散在多台 Windows 机器上的照片建立统一的元数据索引，支持从 iOS 设备与可移动存储自动导入，提供 MD5 去重、EXIF 解析、多节点 P2P 同步与 React95 风格 Web 画廊。
+A distributed local photo / RAW management platform. The **Master-Agent** architecture builds a unified metadata index across multiple Windows machines, with automatic import from iOS devices and removable storage, MD5 de-duplication, EXIF parsing, multi-node P2P sync, and a React95-style web gallery.
+
+> 中文文档：[README.zh.md](README.zh.md)
 
 ---
 
-## 功能特性
+## Features
 
-- **分布式扫描**：Agent 节点定期扫描本地目录，将 EXIF 元数据 + MD5 指纹批量推送给 Master
-- **iOS 导入**：通过 USB AFC 访问 `DCIM`，自动归档、支持 Apple Live Photo `.MOV` 元数据解析
-- **可移动存储导入**：自动检测 SD 卡等可移动驱动器上的 DCIM，复制并归档照片
-- **MD5 去重**：以 `filename + file_md5` 联合约束防止重复入库，入库前可向 Master 预查询
-- **多 Master Gossip 同步**：配置 Peer 节点后，数据通过应用层 P2P 广播实现跨机器最终一致性
-- **Web 画廊**：React95 风格前端，内嵌于 Master，支持按日期/分页浏览
-- **图片代理**：Master 统一代理所有 Agent 上的图片流，前端无需感知分布式拓扑
-- **MCP 集成**：预留 Model Context Protocol 工具接口，可被 AI 客户端调用
-- **Windows 托盘**：Agent / Master 均提供系统托盘图标，支持暂停扫描、开机自启等快捷操作
-- **自动壁纸**（可选）：`BusinessJob` 可将最近拍摄的照片设置为 Windows 桌面壁纸
-
----
-
-## 系统要求
-
-- **操作系统**：Windows 10 / 11（64 位）
-- **运行时**：.NET 10 Runtime（使用 MSI 安装包时已自包含，无需单独安装）
-- **iOS 导入**：需在设备上选择「信任此电脑」并保持 USB 连接
+- **Distributed scanning**: Agent nodes periodically scan local folders and push EXIF metadata + MD5 fingerprints to Master in batches
+- **iOS import**: Access `DCIM` over USB AFC, archive by capture date, support Apple Live Photo `.MOV` metadata
+- **Removable storage import**: Auto-detect SD cards / cameras with DCIM folders, copy and archive files
+- **MD5 de-duplication**: `UNIQUE (filename, file_md5)` constraint prevents duplicates; Agents pre-check with Master before downloading
+- **Multi-Master Gossip sync**: Configure Peer nodes for eventual-consistency replication via application-layer P2P broadcast
+- **Web gallery**: React95-style frontend embedded in Master, browse by date or page
+- **Image proxy**: Master transparently proxies image streams from any Agent — frontend needs no topology awareness
+- **MCP integration**: Model Context Protocol tool endpoint reserved for AI client integration
+- **Windows tray**: Both Agent and Master provide tray icons with pause/resume, startup toggle, and config editing
+- **Auto wallpaper** (optional): `BusinessJob` sets recent captures as the Windows desktop wallpaper
 
 ---
 
-## 快速开始
+## Requirements
 
-### 方式一：MSI 安装包（推荐）
+- **OS**: Windows 10 / 11 (64-bit)
+- **Runtime**: .NET 10 Runtime (self-contained in MSI installer — no separate install needed)
+- **iOS import**: Trust the computer on the device and maintain USB connection
 
-从 [GitHub Releases](https://github.com/naughtyGitCat/UltraSonic/releases) 下载最新版：
+---
 
-- `UltraSonic.LrWallPaper.msi` — Master 中控节点
-- `UltraSonic.LrWallPaper.Agent.msi` — Agent 代理节点
+## Quick Start
 
-安装后分别启动两个程序，系统托盘会出现对应图标。
+### Option 1: MSI Installer (Recommended)
 
-### 方式二：源码运行
+Download the latest release from [GitHub Releases](https://github.com/naughtyGitCat/UltraSonic/releases):
+
+- `UltraSonic.LrWallPaper.msi` — Master node
+- `UltraSonic.LrWallPaper.Agent.msi` — Agent node
+
+Install both, then start each program — a tray icon will appear for each.
+
+### Option 2: Build from Source
 
 ```powershell
 git clone https://github.com/naughtyGitCat/UltraSonic
+
+# Terminal 1 — Master
+cd src/LrWallPaper && dotnet run
+
+# Terminal 2 — Agent
+cd src/LrWallPaper.Agent && dotnet run
+
+# Terminal 3 — Frontend (dev only)
+cd src/LrWallPaper.React && npm install && npm run dev
 ```
 
-**1. 启动 Master（中控节点）**
-
-```powershell
-cd src/LrWallPaper
-dotnet run
-```
-
-首次运行在程序目录自动创建 `ultrasonic.db`。开发模式下自动启用 Swagger UI（`http://localhost:5281/swagger`）。
-
-**2. 启动 Agent（扫描节点）**
-
-```powershell
-cd src/LrWallPaper.Agent
-dotnet run
-```
-
-**3. 启动前端画廊（开发调试用）**
-
-```powershell
-cd src/LrWallPaper.React
-npm install
-npm run dev
-```
-
-浏览器打开 `http://localhost:5173` 即可预览。生产部署时前端已打包进 Master 的 `wwwroot`，直接访问 `http://localhost:5281` 即可。
+On first run `ultrasonic.db` is created automatically in the program directory. Swagger UI is available at `http://localhost:5281/swagger` in development mode. The production frontend is served directly from `http://localhost:5281`.
 
 ---
 
-## 配置
+## Configuration
 
-所有路径均通过 `appsettings.json` 配置，无需改动源码。
+All paths are configured via `appsettings.json` — no source changes needed.
 
-### Master（`src/LrWallPaper/appsettings.json`）
+### Master (`src/LrWallPaper/appsettings.json`)
 
 ```json
 {
@@ -90,16 +77,16 @@ npm run dev
       "ArchiveDirectory": "D:\\Photograph"
     },
     "ArchivePaths": {
-      "Current": "D:/摄影",
-      "History": "X:/摄影"
+      "Current": "D:/Photograph",
+      "History": "X:/Photograph"
     }
   }
 }
 ```
 
-多节点集群：在 `Peers` 数组中填入其他 Master 的地址，如 `["http://192.168.1.10:5281"]`。
+For multi-node clusters, add peer addresses to `Peers`, e.g. `["http://192.168.1.10:5281"]`.
 
-### Agent（`src/LrWallPaper.Agent/appsettings.json`）
+### Agent (`src/LrWallPaper.Agent/appsettings.json`)
 
 ```json
 {
@@ -122,157 +109,87 @@ npm run dev
 }
 ```
 
-`AgentId` 建议设置为有意义的固定字符串（如机器名），保证重启后 ID 一致。
+Set `AgentId` to a stable string (e.g. machine hostname) so the identity persists across restarts.
 
 ---
 
-## 架构概览
+## Architecture
 
 ```
-iOS/SD Card ──USB──► LrWallPaper.Agent ──HTTP Push──► LrWallPaper (Master)
-本地目录 ────────────► (port 5282)                     (port 5281)
-                                                              │
-                                                       SQLite 持久化
-                                                              │
-                                                       Gossip 同步 ──► Peer Master
+iOS / SD Card ──USB──► LrWallPaper.Agent ──HTTP Push──► LrWallPaper (Master)
+Local folders ────────► (port 5282)                      (port 5281)
+                                                               │
+                                                        SQLite persistence
+                                                               │
+                                                        Gossip sync ──► Peer Master
 ```
 
-详见 [`docs/SDD.md`](docs/SDD.md)。
+See [`docs/SDD.md`](docs/SDD.md) for the full architecture, API reference, and data schema.
 
 ---
 
-## 后台任务一览
+## Background Jobs
 
 ### Agent
 
-| Job | 默认状态 | 说明 |
+| Job | Default | Description |
 |---|---|---|
-| `ScanAndPushJob` | 启用 | 定期扫描本地目录，推送元数据到 Master |
-| `DeviceSyncAppleJob` | 启用 | iOS 设备照片导入与归档 |
-| `DeviceSyncGenericJob` | 启用 | 可移动存储（SD 卡）导入与归档 |
+| `ScanAndPushJob` | Enabled | Periodically scans local directories and pushes metadata to Master |
+| `DeviceSyncAppleJob` | Enabled | Imports and archives photos from iOS devices |
+| `DeviceSyncGenericJob` | Enabled | Imports and archives photos from removable drives (SD cards) |
 
 ### Master
 
-| Job | 默认状态 | 说明 |
+| Job | Default | Description |
 |---|---|---|
-| `MasterReplicationJob` | 启用 | Gossip 广播到 Peer Master 节点 |
-| `BusinessJob` | 注释 | 壁纸轮换，按需在 `Program.cs` 中启用 |
-| `SyncRemovableJob` | 注释 | 设备枚举监控（已移至 Agent） |
+| `MasterReplicationJob` | Enabled | Gossip-broadcasts new records to Peer Master nodes |
+| `BusinessJob` | Commented | Wallpaper rotation — uncomment in `Program.cs` to enable |
+| `SyncRemovableJob` | Commented | Device enumeration monitor (superseded by Agent) |
 
 ---
 
 ## Web API
 
-| 接口 | 说明 |
+| Endpoint | Description |
 |---|---|
-| `POST /api/master/sync` | 接收 Agent 推送的文件元数据批次 |
-| `GET /api/master/file-exists?filename=&size=` | 去重预检（Agent 调用） |
-| `GET /api/experiment/{days}` | 返回最近 N 天的拍摄记录 |
-| `GET /api/experiment/page?page=&pageSize=` | 分页查询文件记录 |
-| `GET /api/image?path=&agentId=` | 图片流代理（透明转发到 Agent） |
-| `GET /api/agent` | 查询所有已注册的 Agent |
+| `POST /api/master/sync` | Receive file metadata batch from Agent |
+| `GET /api/master/file-exists?filename=&size=` | Duplicate pre-check (called by Agent) |
+| `GET /api/experiment/{days}` | Files captured within the last N days |
+| `GET /api/experiment/page?page=&pageSize=` | Paged file records |
+| `GET /api/image?path=&agentId=` | Image stream proxy (transparently forwards to Agent) |
+| `GET /api/agent` | List all registered Agents |
 
-开发模式下访问 `http://localhost:5281/swagger` 可在线试用全部接口。
-
----
-
-## 数据存储
-
-- **数据库**：SQLite（`ultrasonic.db`，程序目录下自动创建）
-- **主表** `file_info`：路径、文件名、大小、MD5、拍摄时间、相机信息、来源 Agent ID
-- **唯一约束**：`fullpath`、`(filepath, filename)`、`(filename, file_md5)`
-- **写入策略**：`INSERT OR REPLACE`（upsert，天然幂等）
+Use Swagger UI at `http://localhost:5281/swagger` (development mode) to explore all endpoints.
 
 ---
 
-## 常见问题
+## Data Storage
 
-**iOS 连接报 `FatalPairingException`**  
-在手机上选择「信任此电脑」后重试。若仍失败，检查数据线和驱动程序（Apple 设备服务）。
-
-**Agent 不扫描文件**  
-检查 `appsettings.json` 中 `Agent:ScanPaths` 路径是否存在；也可通过托盘菜单确认扫描未被暂停。
-
-**设备导入不工作**  
-确认 `DeviceSync:AppleImport:ArchiveDirectory` 已配置且目录可写。日志文件在 `logs/agent-*.txt`。
-
-**访问云盘文件报错 `Access to the cloud file is denied`**  
-正常现象，程序会跳过无法访问的云同步文件。确保需要处理的文件已下载到本地。
-
-**壁纸设置无效**  
-取消注释 `Program.cs` 中的 `BusinessJob`，重新构建运行。本功能仅在 Windows 环境生效。
+- **Database**: SQLite (`ultrasonic.db`, auto-created on first run)
+- **Main table** `file_info`: path, filename, size, MD5, capture time, camera info, source Agent ID
+- **Unique constraints**: `fullpath`, `(filepath, filename)`, `(filename, file_md5)`
+- **Write strategy**: `INSERT OR REPLACE` (upsert — naturally idempotent)
 
 ---
-
-## 参考资料
-
-- EXIF 规范：https://www.media.mit.edu/pia/Research/deepview/exif.html
-- MetadataExtractor (.NET)：https://github.com/drewnoakes/metadata-extractor-dotnet
-- Netimobiledevice：https://github.com/artehe/Netimobiledevice
-
----
-
-# UltraSonic (English)
-
-A distributed local photo / RAW management platform. The **Master-Agent** architecture builds a unified metadata index across multiple Windows machines, with automatic import from iOS devices and removable storage, MD5 de-duplication, EXIF parsing, multi-node P2P sync, and a React95-style web gallery.
-
-## Features
-
-- **Distributed scanning**: Agent nodes periodically scan local folders and push EXIF metadata + MD5 fingerprints to Master in batches
-- **iOS import**: Access `DCIM` over USB AFC, archive by capture date, support Apple Live Photo `.MOV` metadata
-- **Removable storage import**: Auto-detect SD cards / cameras with DCIM folders, copy and archive files
-- **MD5 de-duplication**: `UNIQUE (filename, file_md5)` constraint prevents duplicates; Agents pre-check with Master before downloading
-- **Multi-Master Gossip sync**: Configure Peer nodes for eventual-consistency replication via application-layer P2P broadcast
-- **Web gallery**: React95-style frontend embedded in Master, browse by date or page
-- **Image proxy**: Master transparently proxies image streams from any Agent — frontend needs no topology awareness
-- **MCP integration**: Model Context Protocol tool endpoint reserved for AI client integration
-- **Windows tray**: Both Agent and Master provide tray icons with pause/resume, startup toggle, and config editing
-- **Auto wallpaper** (optional): `BusinessJob` sets recent captures as the Windows desktop wallpaper
-
-## Requirements
-
-- **OS**: Windows 10 / 11 (64-bit)
-- **Runtime**: .NET 10 Runtime (self-contained in MSI installer — no separate install needed)
-- **iOS import**: Trust the computer on the device and maintain USB connection
-
-## Quick Start
-
-### Option 1: MSI Installer (Recommended)
-
-Download the latest release from [GitHub Releases](https://github.com/naughtyGitCat/UltraSonic/releases):
-
-- `UltraSonic.LrWallPaper.msi` — Master node
-- `UltraSonic.LrWallPaper.Agent.msi` — Agent node
-
-### Option 2: Build from Source
-
-```powershell
-git clone https://github.com/naughtyGitCat/UltraSonic
-
-# Terminal 1 — Master
-cd src/LrWallPaper && dotnet run
-
-# Terminal 2 — Agent
-cd src/LrWallPaper.Agent && dotnet run
-
-# Terminal 3 — Frontend (dev only)
-cd src/LrWallPaper.React && npm install && npm run dev
-```
-
-## Configuration
-
-All paths are configured via `appsettings.json` — no source changes needed.
-
-Set `Agent:AgentId` to a stable string (e.g. machine hostname). Leave `MasterCluster:Peers` empty for single-node mode.
-
-See [`docs/SDD.md`](docs/SDD.md) for full architecture and API reference.
 
 ## FAQ
 
-- **`FatalPairingException`**: Trust the computer on the iOS device and retry; check cable/drivers if it persists.
-- **Agent not scanning**: Verify `Agent:ScanPaths` directories exist; check the tray icon to confirm scanning is not paused.
-- **Cloud file access denied**: Expected behavior — the tool skips files not downloaded locally.
-- **Wallpaper not changing**: Uncomment `BusinessJob` in `Program.cs` and rebuild. Windows-only feature.
+**`FatalPairingException` on iOS connect**  
+Select "Trust This Computer" on the device and retry. If it persists, check the cable and Apple Mobile Device drivers.
+
+**Agent is not scanning files**  
+Verify `Agent:ScanPaths` directories exist and are accessible. Check the tray icon to confirm scanning is not paused.
+
+**Device import not working**  
+Confirm `DeviceSync:AppleImport:ArchiveDirectory` is set and the directory is writable. Check logs at `logs/agent-*.txt`.
+
+**"Access to the cloud file is denied"**  
+Expected behavior — the tool skips cloud-synced files that are not downloaded locally.
+
+**Wallpaper not changing**  
+Uncomment `BusinessJob` in `src/LrWallPaper/Program.cs` and rebuild. Windows-only feature.
+
+---
 
 ## References
 
