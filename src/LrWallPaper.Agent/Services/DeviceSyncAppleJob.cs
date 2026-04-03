@@ -16,16 +16,19 @@ public class DeviceSyncAppleJob : BackgroundService
     private readonly ILogger<DeviceSyncAppleJob> _logger;
     private readonly IConfiguration _configuration;
     private readonly ClusterDiscoveryService _discovery;
+    private readonly DeviceSyncTrigger _trigger;
     private readonly HttpClient _httpClient = new();
 
     public DeviceSyncAppleJob(
         ILogger<DeviceSyncAppleJob> logger,
         IConfiguration configuration,
-        ClusterDiscoveryService discovery)
+        ClusterDiscoveryService discovery,
+        DeviceSyncTrigger trigger)
     {
         _logger = logger;
         _configuration = configuration;
         _discovery = discovery;
+        _trigger = trigger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -69,7 +72,8 @@ public class DeviceSyncAppleJob : BackgroundService
                 _logger.LogError(ex, "Apple device sync failed");
             }
 
-            await Task.Delay(new TimeSpan(1, 5, 8), stoppingToken);
+            // Wait for next polling interval or external trigger (whichever comes first)
+            await _trigger.WaitAsync(new TimeSpan(1, 5, 8), stoppingToken);
         }
     }
 

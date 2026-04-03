@@ -26,6 +26,8 @@ builder.Services.AddSingleton<TrayIconManager>();
 builder.Services.AddHostedService<ScanAndPushJob>();
 builder.Services.AddHostedService<DeviceSyncAppleJob>();
 builder.Services.AddHostedService<DeviceSyncGenericJob>();
+builder.Services.AddHostedService<DeviceMonitorJob>();
+builder.Services.AddSingleton<DeviceSyncTrigger>();
 
 // ── SWIM Cluster Discovery ──────────────────────────────
 var clusterHttpEndpoint = builder.Configuration["Cluster:HttpEndpoint"]
@@ -101,6 +103,13 @@ app.MapGet("/api/agent/image", (string path, AgentState agentState) =>
     };
 
     return Results.File(path, contentType);
+});
+
+// Sync trigger endpoint: Master calls this to start device sync on demand
+app.MapPost("/api/agent/sync/trigger", async (DeviceSyncTrigger trigger) =>
+{
+    trigger.TriggerNow();
+    return Results.Ok(new { Status = "triggered" });
 });
 
 app.Run();

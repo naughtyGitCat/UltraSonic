@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Net.Http.Json;
 using LrWallPaper.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -10,15 +12,21 @@ public class MasterSyncController : ControllerBase
     private readonly FileMD5Manager _md5Manager;
     private readonly MasterReplicationService _replicationService;
     private readonly INotificationService _notification;
+    private readonly IHttpClientFactory _httpClientFactory;
+
+    // In-memory list of recently detected devices (cleared on sync trigger)
+    private static readonly ConcurrentDictionary<string, DeviceDetectedReport> _detectedDevices = new();
 
     public MasterSyncController(
         FileMD5Manager md5Manager,
         MasterReplicationService replicationService,
-        INotificationService notification)
+        INotificationService notification,
+        IHttpClientFactory httpClientFactory)
     {
         _md5Manager = md5Manager;
         _replicationService = replicationService;
         _notification = notification;
+        _httpClientFactory = httpClientFactory;
     }
 
     [HttpGet("file-exists")]
@@ -74,6 +82,50 @@ public class MasterSyncController : ControllerBase
         var ok = await _notification.SendAsync(request.Title, request.Body ?? "", request.Group);
         return Ok(new { Sent = ok });
     }
+
+    /// <summary>
+    /// Agent reports a newly detected device. Master stores it for UI display.
+    /// </summary>
+    [HttpPost("device-detected")]
+    public IActionResult DeviceDetected([FromBody] DeviceDetectedReport report)
+    {
+        _detectedDevices[report.DeviceId] = report;
+        return Ok();
+    }
+
+    /// <summary>
+    /// Returns devices recently detected by Agents, available for sync trigger.
+    /// </summary>
+    [HttpGet("devices")]
+    public IActionResult GetDetectedDevices()
+    {
+        return Ok(_detectedDevices.Values.OrderByDescending(d => d.DetectedAt));
+    }
+
+    /// <summary>
+    /// Master triggers device sync on a specific Agent.
+    /// The Agent will immediately start syncing all connected devices.
+    /// </summary>
+    [HttpPost("trigger-sync/{agentId}")]
+    public async Task<IActionResult> TriggerSync(string agentId, [FromServices] AgentManager agentManager)
+    {
+        var agents = await agentManager.GetAllAgentsAsync();
+        var agent = agents.FirstOrDefault(a => a.Id == agentId);
+        if (agent == null || string.IsNullOrEmpty(agent.Endpoint))
+            return NotFound(new { Error = $"Agent '{agentId}' not found" });
+
+        var client = _httpClientFactory.CreateClient("ClusterClient");
+        try
+        {
+            var url = $"{agent.Endpoint.TrimEnd('/')}/api/agent/sync/trigger";
+            var response = await client.PostAsync(url, null);
+            return Ok(new { Status = "triggered", AgentId = agentId, AgentEndpoint = agent.Endpoint });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(502, new { Error = $"Failed to reach agent: {ex.Message}" });
+        }
+    }
 }
 
 public record NotifyRequest
@@ -81,4 +133,14 @@ public record NotifyRequest
     public string Title { get; init; } = string.Empty;
     public string? Body { get; init; }
     public string? Group { get; init; }
+}
+
+public record DeviceDetectedReport
+{
+    public string AgentId { get; init; } = string.Empty;
+    public string AgentEndpoint { get; init; } = string.Empty;
+    public string DeviceId { get; init; } = string.Empty;
+    public string DeviceName { get; init; } = string.Empty;
+    public string DeviceType { get; init; } = string.Empty;
+    public DateTime DetectedAt { get; init; }
 }
