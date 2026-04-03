@@ -6,7 +6,12 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>agent.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="agent.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="MetadataExtractor.NaughtyGitCat" Version="1.0.0" />

@@ -9,7 +9,12 @@
     <UserSecretsId>67297a6b-4081-41ba-9dcf-32b285aa6df3</UserSecretsId>
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
     <DockerfileContext>..\..</DockerfileContext>
+    <ApplicationIcon>master.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="master.ico" />
+  </ItemGroup>
 
 
   <ItemGroup>
