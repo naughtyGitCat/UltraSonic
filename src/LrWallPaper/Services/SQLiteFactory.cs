@@ -1,13 +1,13 @@
 //psyduck 20220409
 using System.IO;
-using System.Data.SQLite;
+using Microsoft.Data.Sqlite;
 using NPoco;
 using LrWallPaper.Models;
 namespace LrWallPaper.Services;
 
 public interface ICustomSQLiteFactory
 {
-    public SQLiteConnection GetConnection();
+    public SqliteConnection GetConnection();
     public IDatabase GetDatabase();
 }
 
@@ -19,14 +19,14 @@ public class CustomSQLiteFactory : ICustomSQLiteFactory
         _db = @$"Data Source={config.Lightroom.CatalogPath};Mode=ReadOnly";
     }
 
-    public SQLiteConnection GetConnection()
+    public SqliteConnection GetConnection()
     {
-        return new SQLiteConnection(_db);
+        return new SqliteConnection(_db);
     }
 
     public IDatabase GetDatabase()
     {
-        return new Database(_db, DatabaseType.SQLite, SQLiteFactory.Instance);
+        return new Database(_db, DatabaseType.SQLite, SqliteFactory.Instance);
     }
 }
 
@@ -67,17 +67,17 @@ public class LightroomDatabaseService : ICustomSQLiteFactory
         File.Delete(_tempDBPath);
     }
 
-    public SQLiteConnection GetConnection()
+    public SqliteConnection GetConnection()
     {
         //https://docs.microsoft.com/en-us/dotnet/standard/data/sqlite
         var connectionString = @$"Data Source={_tempDBPath};Mode=ReadOnly;Pooling=False";
-        return new SQLiteConnection(connectionString);
+        return new SqliteConnection(connectionString);
     }
 
     public IDatabase GetDatabase()
     {
         var connectionString = @$"Data Source={_tempDBPath};Mode=ReadOnly;Pooling=False";
-        return new Database(connectionString, DatabaseType.SQLite, SQLiteFactory.Instance);
+        return new Database(connectionString, DatabaseType.SQLite, SqliteFactory.Instance);
     }
     
     public async Task CleanJob()

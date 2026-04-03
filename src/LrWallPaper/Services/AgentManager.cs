@@ -1,5 +1,5 @@
 using NPoco;
-using System.Data.SQLite;
+using Microsoft.Data.Sqlite;
 
 namespace LrWallPaper.Services;
 
@@ -25,7 +25,7 @@ public class AgentManager
     {
         _logger = logger;
         var dbPath = Path.Combine(AppContext.BaseDirectory, "ultrasonic.db");
-        _database = new Database($"Data Source={dbPath}", DatabaseType.SQLite, SQLiteFactory.Instance);
+        _database = new Database($"Data Source={dbPath}", DatabaseType.SQLite, SqliteFactory.Instance);
     }
 
     public async Task<List<AgentEntity>> GetAllAgentsAsync()
