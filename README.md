@@ -92,8 +92,8 @@ UltraSonic is a set of photo management tools: it scans local photos and RAW fil
 - Web API: basic query endpoints with Swagger in development mode
 
 ## Requirements
-- OS: Windows 7 or later
-- Runtime: .NET 8 SDK/Runtime
+- OS: Windows 10 or later
+- Runtime: .NET 10 SDK/Runtime
 
 ## Quick Start
 
