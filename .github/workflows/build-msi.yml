@@ -25,6 +25,19 @@ jobs:
       - name: Install WiX Toolset v5
         run: dotnet tool install --global wix --version 5.0.2
 
+      # ── Build React Frontend ─────────────────────────────────
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build React Frontend
+        working-directory: src/LrWallPaper.React
+        run: |
+          npm ci
+          npm run build
+
       # ── Publish ──────────────────────────────────────────────
 
       - name: Publish LrWallPaper (Master)

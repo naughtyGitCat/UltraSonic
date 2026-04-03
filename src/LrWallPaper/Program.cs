@@ -17,6 +17,7 @@ class Program
             .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
             .Enrich.FromLogContext()
             .WriteTo.Console(outputTemplate: logTemplate)
+            .WriteTo.File("logs/master-.txt", rollingInterval: RollingInterval.Day, outputTemplate: logTemplate)
             .CreateLogger();
         var builder = WebApplication.CreateBuilder(args);
         
@@ -34,6 +35,7 @@ class Program
         builder.Services.AddHttpClient("ClusterClient");
         builder.Services.AddSingleton<MasterReplicationService>();
         builder.Services.AddHostedService<MasterReplicationJob>();
+        builder.Services.AddSingleton<MasterTrayIconManager>();
         
         builder.Services.AddControllers();
         // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -55,12 +57,22 @@ class Program
             app.UseSwagger();
             app.UseSwaggerUI();
         }
+        var trayManager = app.Services.GetRequiredService<MasterTrayIconManager>();
+        trayManager.Start();
+        app.Lifetime.ApplicationStopping.Register(() => trayManager.Stop());
 
 // app.UseHttpsRedirection();
+
+        // Serve React build output from wwwroot
+        app.UseDefaultFiles();
+        app.UseStaticFiles();
 
         app.UseAuthorization();
 
         app.MapControllers();
+
+        // SPA fallback: any unmatched route returns index.html
+        app.MapFallbackToFile("index.html");
 
         app.MapGet("/api/image", async (string path, string? agentId, AgentManager agentManager) =>
         {
