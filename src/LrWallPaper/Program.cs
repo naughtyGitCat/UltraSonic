@@ -4,6 +4,10 @@ using ModelContextProtocol.Server;
 using Serilog;
 using Serilog.Events;
 using Microsoft.AspNetCore.Hosting;
+using SlimCluster;
+using SlimCluster.Membership.Swim;
+using SlimCluster.Serialization.Json;
+using SlimCluster.Transport.Ip;
 
 using LrWallPaper.Jobs;
 using LrWallPaper.Models;
@@ -39,6 +43,31 @@ class Program
         builder.Services.AddSingleton<MasterReplicationService>();
         builder.Services.AddHostedService<MasterReplicationJob>();
         builder.Services.AddSingleton<MasterTrayIconManager>();
+
+        // ── SWIM Cluster Discovery ──────────────────────────────
+        var clusterHttpEndpoint = builder.Configuration["Cluster:HttpEndpoint"]
+            ?? builder.Configuration["Urls"]
+            ?? "http://localhost:5281";
+        var clusterNodeKey = builder.Configuration["Cluster:NodeKey"] ?? Environment.MachineName;
+        var nodeId = ClusterNodeInfo.BuildNodeId(ClusterNodeRole.Master, clusterNodeKey, clusterHttpEndpoint);
+
+        builder.Services.AddSlimCluster(cfg =>
+        {
+            cfg.ClusterId = builder.Configuration["Cluster:ClusterId"] ?? "UltraSonic";
+            cfg.NodeId = nodeId;
+            cfg.AddIpTransport(opts =>
+            {
+                opts.Port = builder.Configuration.GetValue("Cluster:UdpPort", 5300);
+                opts.MulticastGroupAddress = builder.Configuration["Cluster:MulticastGroupAddress"] ?? "239.255.85.67";
+            });
+            cfg.AddJsonSerialization();
+            cfg.AddSwimMembership(opts =>
+            {
+                opts.MembershipEventPiggybackCount = 2;
+            });
+        });
+        builder.Services.AddSingleton<ClusterDiscoveryService>();
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<ClusterDiscoveryService>());
         
         builder.Services.AddControllers();
         // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

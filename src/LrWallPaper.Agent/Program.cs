@@ -1,6 +1,10 @@
 using Serilog;
 using Serilog.Events;
 using LrWallPaper.Agent.Services;
+using SlimCluster;
+using SlimCluster.Membership.Swim;
+using SlimCluster.Serialization.Json;
+using SlimCluster.Transport.Ip;
 
 var logTemplate = "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz}[{Level:u3}][{SourceContext}]{Message:lj}{NewLine}{Exception}";
 Log.Logger = new LoggerConfiguration()
@@ -22,6 +26,35 @@ builder.Services.AddSingleton<TrayIconManager>();
 builder.Services.AddHostedService<ScanAndPushJob>();
 builder.Services.AddHostedService<DeviceSyncAppleJob>();
 builder.Services.AddHostedService<DeviceSyncGenericJob>();
+
+// ── SWIM Cluster Discovery ──────────────────────────────
+var clusterHttpEndpoint = builder.Configuration["Cluster:HttpEndpoint"]
+    ?? builder.Configuration["Urls"]
+    ?? "http://localhost:5245";
+var agentId = builder.Configuration["Agent:AgentId"];
+if (string.IsNullOrEmpty(agentId))
+{
+    agentId = Environment.MachineName;
+}
+var nodeId = ClusterNodeInfo.BuildNodeId(ClusterNodeRole.Agent, agentId, clusterHttpEndpoint);
+
+builder.Services.AddSlimCluster(cfg =>
+{
+    cfg.ClusterId = builder.Configuration["Cluster:ClusterId"] ?? "UltraSonic";
+    cfg.NodeId = nodeId;
+    cfg.AddIpTransport(opts =>
+    {
+        opts.Port = builder.Configuration.GetValue("Cluster:UdpPort", 5300);
+        opts.MulticastGroupAddress = builder.Configuration["Cluster:MulticastGroupAddress"] ?? "239.255.85.67";
+    });
+    cfg.AddJsonSerialization();
+    cfg.AddSwimMembership(opts =>
+    {
+        opts.MembershipEventPiggybackCount = 2;
+    });
+});
+builder.Services.AddSingleton<ClusterDiscoveryService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ClusterDiscoveryService>());
 
 var app = builder.Build();
 

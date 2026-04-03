@@ -23,11 +23,18 @@ public class ScanAndPushJob : BackgroundService
         ".mp4", ".mov", ".avi", ".mkv", ".mts"
     };
 
-    public ScanAndPushJob(ILogger<ScanAndPushJob> logger, IConfiguration configuration, AgentState agentState)
+    private readonly ClusterDiscoveryService _discovery;
+
+    public ScanAndPushJob(
+        ILogger<ScanAndPushJob> logger,
+        IConfiguration configuration,
+        AgentState agentState,
+        ClusterDiscoveryService discovery)
     {
         _logger = logger;
         _configuration = configuration;
         _agentState = agentState;
+        _discovery = discovery;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -45,7 +52,12 @@ public class ScanAndPushJob : BackgroundService
 
             // Read configuration dynamically on each iteration so changes in appsettings.json apply immediately
             var agentId = _configuration["Agent:AgentId"];
-            var masterEndpoint = _configuration["Agent:MasterEndpoint"] ?? "http://localhost:5281";
+            // Prefer SWIM-discovered Master; fallback to config
+            var masterEndpoint = _discovery.GetMasterEndpoint()
+                ?? _configuration["Agent:MasterEndpoint"]
+                ?? "http://localhost:5281";
+            _logger.LogDebug("Using Master endpoint: {Endpoint} (discovered={IsDiscovered})",
+                masterEndpoint, _discovery.GetMasterEndpoint() != null);
             var scanPaths = _configuration.GetSection("Agent:ScanPaths").Get<string[]>() ?? [];
             var intervalMinutes = _configuration.GetValue("Agent:ScanIntervalMinutes", 60);
             var supportedExts = _configuration.GetSection("Agent:SupportedExtensions").Get<string[]>();

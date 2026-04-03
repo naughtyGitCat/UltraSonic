@@ -28,12 +28,12 @@ public class MasterSyncController : ControllerBase
     public async Task<IActionResult> Sync([FromBody] List<FileMD5Entity> captures, [FromQuery] bool is_republished = false)
     {
         if (captures == null || !captures.Any()) return Ok();
-        
+
         foreach(var c in captures)
         {
-            if (string.IsNullOrEmpty(c.AgentId)) 
+            if (string.IsNullOrEmpty(c.AgentId))
                 c.AgentId = "local";
-                
+
             await _md5Manager.SaveFileMD5Async(c);
         }
 
@@ -43,7 +43,18 @@ public class MasterSyncController : ControllerBase
         {
             _replicationService.Enqueue(captures);
         }
-        
+
         return Ok(new { Count = captures.Count });
+    }
+
+    /// <summary>
+    /// Incremental sync endpoint: returns records updated after the given timestamp.
+    /// Used for Master-to-Master pull-based sync as a fallback/catch-up mechanism.
+    /// </summary>
+    [HttpGet("sync/since")]
+    public async Task<IActionResult> GetSince([FromQuery] DateTime since, [FromQuery] int limit = 1000)
+    {
+        var records = await _md5Manager.GetRecordsSinceAsync(since, limit);
+        return Ok(records);
     }
 }
