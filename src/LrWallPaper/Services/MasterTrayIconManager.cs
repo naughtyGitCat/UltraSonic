@@ -28,9 +28,15 @@ public class MasterTrayIconManager
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
+            Icon trayIcon;
+            using (var stream = typeof(MasterTrayIconManager).Assembly.GetManifestResourceStream("LrWallPaper.master.ico"))
+            {
+                trayIcon = stream != null ? new Icon(stream) : (Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application);
+            }
+
             _notifyIcon = new NotifyIcon
             {
-                Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application,
+                Icon = trayIcon,
                 Text = "UltraSonic Master",
                 Visible = true
             };

@@ -29,10 +29,16 @@ public class TrayIconManager
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
+            Icon trayIcon;
+            using (var stream = typeof(TrayIconManager).Assembly.GetManifestResourceStream("LrWallPaper.Agent.agent.ico"))
+            {
+                trayIcon = stream != null ? new Icon(stream) : (Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application);
+            }
+
             _notifyIcon = new NotifyIcon
             {
-                Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application,
-                Text = "LrWallPaper Agent",
+                Icon = trayIcon,
+                Text = "UltraSonic Agent",
                 Visible = true
             };
 
