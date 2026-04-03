@@ -2,7 +2,7 @@
   <Package
     Name="UltraSonic LrWallPaper Agent"
     Manufacturer="NaughtyGitCat"
-    Version="1.0.0.0"
+    Version="1.0.1.0"
     UpgradeCode="B2C3D4E5-F6A7-8901-BCDE-F12345678901"
     Compressed="yes"
     InstallerVersion="500">
