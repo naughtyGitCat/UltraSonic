@@ -9,11 +9,16 @@ public class MasterSyncController : ControllerBase
 {
     private readonly FileMD5Manager _md5Manager;
     private readonly MasterReplicationService _replicationService;
+    private readonly INotificationService _notification;
 
-    public MasterSyncController(FileMD5Manager md5Manager, MasterReplicationService replicationService)
+    public MasterSyncController(
+        FileMD5Manager md5Manager,
+        MasterReplicationService replicationService,
+        INotificationService notification)
     {
         _md5Manager = md5Manager;
         _replicationService = replicationService;
+        _notification = notification;
     }
 
     [HttpGet("file-exists")]
@@ -57,4 +62,23 @@ public class MasterSyncController : ControllerBase
         var records = await _md5Manager.GetRecordsSinceAsync(since, limit);
         return Ok(records);
     }
+
+    /// <summary>
+    /// Generic notification relay endpoint. Agents call this to send push notifications
+    /// through the Master's configured notification service (e.g. Bark).
+    /// </summary>
+    [HttpPost("notify")]
+    public async Task<IActionResult> Notify([FromBody] NotifyRequest request)
+    {
+        if (string.IsNullOrEmpty(request.Title)) return BadRequest("title is required");
+        var ok = await _notification.SendAsync(request.Title, request.Body ?? "", request.Group);
+        return Ok(new { Sent = ok });
+    }
+}
+
+public record NotifyRequest
+{
+    public string Title { get; init; } = string.Empty;
+    public string? Body { get; init; }
+    public string? Group { get; init; }
 }

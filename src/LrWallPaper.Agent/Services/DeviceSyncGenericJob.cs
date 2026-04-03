@@ -11,12 +11,17 @@ public class DeviceSyncGenericJob : BackgroundService
 {
     private readonly ILogger<DeviceSyncGenericJob> _logger;
     private readonly IConfiguration _configuration;
+    private readonly ClusterDiscoveryService _discovery;
     private readonly HttpClient _httpClient = new();
 
-    public DeviceSyncGenericJob(ILogger<DeviceSyncGenericJob> logger, IConfiguration configuration)
+    public DeviceSyncGenericJob(
+        ILogger<DeviceSyncGenericJob> logger,
+        IConfiguration configuration,
+        ClusterDiscoveryService discovery)
     {
         _logger = logger;
         _configuration = configuration;
+        _discovery = discovery;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -25,7 +30,9 @@ public class DeviceSyncGenericJob : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            var masterEndpoint = _configuration["Agent:MasterEndpoint"] ?? "http://localhost:5281";
+            var masterEndpoint = _discovery.GetMasterEndpoint()
+                ?? _configuration["Agent:MasterEndpoint"]
+                ?? "http://localhost:5281";
             var agentId = _configuration["Agent:AgentId"] ?? "local";
             var archiveDir = _configuration["DeviceSync:GenericImport:ArchiveDirectory"] ?? "";
 
@@ -39,8 +46,16 @@ public class DeviceSyncGenericJob : BackgroundService
             try
             {
                 _logger.LogInformation("Starting generic device scan...");
-                await ImportFromRemovableDrivesAsync(masterEndpoint, agentId, archiveDir, stoppingToken);
-                _logger.LogInformation("Generic device scan completed.");
+                var importedCount = await ImportFromRemovableDrivesAsync(masterEndpoint, agentId, archiveDir, stoppingToken);
+                _logger.LogInformation("Generic device scan completed. Imported {Count} files.", importedCount);
+
+                if (importedCount > 0)
+                {
+                    await NotifyMasterAsync(masterEndpoint,
+                        "可移动设备同步完成",
+                        $"Agent [{agentId}] 从可移动设备导入了 {importedCount} 个文件",
+                        "device-sync");
+                }
             }
             catch (Exception ex)
             {
@@ -51,13 +66,14 @@ public class DeviceSyncGenericJob : BackgroundService
         }
     }
 
-    private async Task ImportFromRemovableDrivesAsync(string masterEndpoint, string agentId,
+    private async Task<int> ImportFromRemovableDrivesAsync(string masterEndpoint, string agentId,
         string archiveDir, CancellationToken ct)
     {
         var drives = DriveInfo.GetDrives()
             .Where(d => d.IsReady && d.DriveType == DriveType.Removable)
             .ToList();
 
+        var totalImported = 0;
         foreach (var drive in drives)
         {
             if (!drive.IsReady) continue;
@@ -71,7 +87,9 @@ public class DeviceSyncGenericJob : BackgroundService
 
             if (batch.Count > 0)
                 await PushBatchAsync(masterEndpoint, batch, ct);
+            totalImported += batch.Count;
         }
+        return totalImported;
     }
 
     private async Task ProcessDirectoryAsync(string dir, string masterEndpoint, string agentId,
@@ -193,6 +211,19 @@ public class DeviceSyncGenericJob : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to push generic import batch to Master");
+        }
+    }
+
+    private async Task NotifyMasterAsync(string masterEndpoint, string title, string body, string group)
+    {
+        try
+        {
+            var url = $"{masterEndpoint.TrimEnd('/')}/api/master/notify";
+            await _httpClient.PostAsJsonAsync(url, new { title, body, group });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send notification to Master");
         }
     }
 

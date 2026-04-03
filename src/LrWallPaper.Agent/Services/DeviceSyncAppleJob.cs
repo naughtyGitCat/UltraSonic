@@ -15,12 +15,17 @@ public class DeviceSyncAppleJob : BackgroundService
 {
     private readonly ILogger<DeviceSyncAppleJob> _logger;
     private readonly IConfiguration _configuration;
+    private readonly ClusterDiscoveryService _discovery;
     private readonly HttpClient _httpClient = new();
 
-    public DeviceSyncAppleJob(ILogger<DeviceSyncAppleJob> logger, IConfiguration configuration)
+    public DeviceSyncAppleJob(
+        ILogger<DeviceSyncAppleJob> logger,
+        IConfiguration configuration,
+        ClusterDiscoveryService discovery)
     {
         _logger = logger;
         _configuration = configuration;
+        _discovery = discovery;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -29,7 +34,9 @@ public class DeviceSyncAppleJob : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            var masterEndpoint = _configuration["Agent:MasterEndpoint"] ?? "http://localhost:5281";
+            var masterEndpoint = _discovery.GetMasterEndpoint()
+                ?? _configuration["Agent:MasterEndpoint"]
+                ?? "http://localhost:5281";
             var agentId = _configuration["Agent:AgentId"] ?? "local";
             var tempDir = _configuration["DeviceSync:AppleImport:TempDirectory"] ?? Path.GetTempPath();
             var archiveDir = _configuration["DeviceSync:AppleImport:ArchiveDirectory"] ?? "";
@@ -43,9 +50,18 @@ public class DeviceSyncAppleJob : BackgroundService
 
             try
             {
-                foreach (var device in GetAppleDevices())
+                var devices = GetAppleDevices().ToList();
+                foreach (var device in devices)
                 {
                     await SyncDeviceAsync(device, masterEndpoint, agentId, tempDir, archiveDir, stoppingToken);
+                }
+
+                if (devices.Count > 0)
+                {
+                    await NotifyMasterAsync(masterEndpoint,
+                        "iOS 设备同步完成",
+                        $"Agent [{agentId}] 完成 {devices.Count} 台 Apple 设备的同步",
+                        "device-sync");
                 }
             }
             catch (Exception ex)
@@ -204,6 +220,19 @@ public class DeviceSyncAppleJob : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to push Apple import batch to Master");
+        }
+    }
+
+    private async Task NotifyMasterAsync(string masterEndpoint, string title, string body, string group)
+    {
+        try
+        {
+            var url = $"{masterEndpoint.TrimEnd('/')}/api/master/notify";
+            await _httpClient.PostAsJsonAsync(url, new { title, body, group });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send notification to Master");
         }
     }
 
