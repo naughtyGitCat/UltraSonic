@@ -43,13 +43,13 @@ jobs:
       - name: Publish LrWallPaper (Master)
         run: >
           dotnet publish src/LrWallPaper/LrWallPaper.csproj
-          -c Release -r win-x64 --self-contained
+          -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
           -o publish/LrWallPaper
 
       - name: Publish LrWallPaper.Agent
         run: >
           dotnet publish src/LrWallPaper.Agent/LrWallPaper.Agent.csproj
-          -c Release -r win-x64 --self-contained
+          -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
           -o publish/LrWallPaper.Agent
 
       # ── Build MSI ───────────────────────────────────────────
