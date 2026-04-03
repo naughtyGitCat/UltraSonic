@@ -8,6 +8,7 @@ Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
     .Enrich.FromLogContext()
     .WriteTo.Console(outputTemplate: logTemplate)
+    .WriteTo.File("logs/agent-.txt", rollingInterval: RollingInterval.Day, outputTemplate: logTemplate)
     .CreateLogger();
 
 var builder = WebApplication.CreateBuilder(args);
@@ -16,9 +17,15 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddSerilog();
+builder.Services.AddSingleton<AgentState>();
+builder.Services.AddSingleton<TrayIconManager>();
 builder.Services.AddHostedService<ScanAndPushJob>();
 
 var app = builder.Build();
+
+var trayManager = app.Services.GetRequiredService<TrayIconManager>();
+trayManager.Start();
+app.Lifetime.ApplicationStopping.Register(() => trayManager.Stop());
 
 if (app.Environment.IsDevelopment())
 {
@@ -30,8 +37,12 @@ app.UseAuthorization();
 app.MapControllers();
 
 // Image streaming endpoint
-app.MapGet("/api/agent/image", (string path) =>
+app.MapGet("/api/agent/image", (string path, AgentState agentState) =>
 {
+    if (!agentState.IsRequestEnabled)
+    {
+        return Results.StatusCode(503);
+    }
     if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path))
     {
         return Results.NotFound();
