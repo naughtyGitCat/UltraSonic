@@ -121,7 +121,7 @@ namespace LrWallPaper.Services
                {
                    throw new Exception("conn is null");
                }*/
-            using var conn = new SQLiteConnection(@"Data Source=ultrasonic.db");
+            using var conn = new SQLiteConnection(_connectionString);
              conn.Open();
             // var cmd = _database.CreateCommand(conn, commandType: System.Data.CommandType.Text, pSQL);
             var cmd = conn.CreateCommand();
