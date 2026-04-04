@@ -37,4 +37,62 @@ public class AgentController : ControllerBase
         await _agentManager.DeleteAgentAsync(id);
         return Ok();
     }
+
+    /// <summary>
+    /// Returns all agents with health status and version checked from Master side.
+    /// Frontend should call this instead of directly hitting agent endpoints.
+    /// </summary>
+    [HttpGet("status")]
+    public async Task<IActionResult> GetStatus()
+    {
+        var agents = await _agentManager.GetAllAgentsAsync();
+        var client = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+        var results = new List<object>();
+
+        // Master self-check
+        var masterAsm = System.Reflection.Assembly.GetExecutingAssembly();
+        var masterVersion = masterAsm.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion ?? "unknown";
+
+        results.Add(new {
+            id = "local",
+            name = "Master Local",
+            endpoint = $"http://{Request.Host}",
+            version = masterVersion,
+            health = "healthy",
+            lastSeen = (string?)null
+        });
+
+        foreach (var agent in agents)
+        {
+            string health = "unhealthy";
+            string version = agent.Version;
+            try
+            {
+                var resp = await client.GetAsync($"{agent.Endpoint.TrimEnd('/')}/api/agent/health");
+                if (resp.IsSuccessStatusCode) health = "healthy";
+            }
+            catch { }
+
+            // Also try to get latest version from agent
+            try
+            {
+                var vResp = await client.GetFromJsonAsync<VersionResponse>($"{agent.Endpoint.TrimEnd('/')}/api/agent/version");
+                if (vResp?.Version != null) version = vResp.Version;
+            }
+            catch { }
+
+            results.Add(new {
+                id = agent.Id,
+                name = agent.Name,
+                endpoint = agent.Endpoint,
+                version,
+                health,
+                lastSeen = agent.LastSeen?.ToString("yyyy-MM-dd HH:mm:ss")
+            });
+        }
+        return Ok(results);
+    }
+
+    private record VersionResponse(string Version);
 }

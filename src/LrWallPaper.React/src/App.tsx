@@ -335,29 +335,18 @@ function App() {
       .catch(err => { console.error('Error fetching:', err); setLoading(false); });
   }, [page, selectedMaker, selectedModel, selectedFileType, selectedAgent, dateFrom, dateTo, hasGps, mediaType]);
 
-  useEffect(() => {
-    if (activeTab === 1) {
-      fetchAgents();
-      fetch('/api/version').then(r => r.json()).then(d => setMasterVersion(d.version || '')).catch(() => {});
-    }
-  }, [activeTab]);
+  useEffect(() => { if (activeTab === 1) fetchAgents(); }, [activeTab]);
 
-  const checkHealth = (agents: Agent[]) => {
-    setMasterHealth('checking');
-    fetch('/api/health', { signal: AbortSignal.timeout(3000) })
-      .then(r => r.ok ? setMasterHealth('healthy') : setMasterHealth('unhealthy'))
-      .catch(() => setMasterHealth('unhealthy'));
-    const h: Record<string, 'healthy' | 'unhealthy' | 'checking'> = {};
-    agents.forEach(a => { h[a.id] = 'checking'; });
-    setAgentHealth(h);
-    agents.forEach(a => {
-      fetch(`${a.endpoint.replace(/\/$/, '')}/api/agent/health`, { signal: AbortSignal.timeout(3000) })
-        .then(r => setAgentHealth(prev => ({ ...prev, [a.id]: r.ok ? 'healthy' : 'unhealthy' })))
-        .catch(() => setAgentHealth(prev => ({ ...prev, [a.id]: 'unhealthy' })));
-    });
-  };
   const fetchAgents = () => {
-    fetch('/api/agent').then(r => r.json()).then((data: Agent[]) => { setAgents(data); checkHealth(data); }).catch(console.error);
+    fetch('/api/agent/status').then(r => r.json()).then((data: Array<{id:string;name:string;endpoint:string;version:string;health:string;lastSeen?:string}>) => {
+      const master = data.find(d => d.id === 'local');
+      if (master) { setMasterVersion(master.version); setMasterHealth(master.health === 'healthy' ? 'healthy' : 'unhealthy'); }
+      const agentList = data.filter(d => d.id !== 'local');
+      setAgents(agentList.map(a => ({ id: a.id, name: a.name, endpoint: a.endpoint, version: a.version, lastSeen: a.lastSeen })));
+      const h: Record<string, 'healthy' | 'unhealthy' | 'checking'> = {};
+      agentList.forEach(a => { h[a.id] = a.health === 'healthy' ? 'healthy' : 'unhealthy'; });
+      setAgentHealth(h);
+    }).catch(console.error);
   };
   const handleAddAgent = () => {
     fetch('/api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newAgentName, endpoint: newAgentIp }) })
@@ -503,7 +492,7 @@ function App() {
                       <label>API Endpoint:</label>
                       <TextInput placeholder="e.g. http://192.168.1.100:5000" value={newAgentIp} onChange={(e) => setNewAgentIp(e.target.value)} style={{ width: '250px' }} />
                       <Button onClick={handleAddAgent}>Add Node</Button>
-                      <Button onClick={() => { fetchAgents(); fetch('/api/version').then(r => r.json()).then(d => setMasterVersion(d.version || '')).catch(() => {}); }}>Refresh</Button>
+                      <Button onClick={fetchAgents}>Refresh</Button>
                     </div>
                   </fieldset>
                   <ScrollView style={{ height: '300px' }}>
