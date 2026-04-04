@@ -89,9 +89,9 @@ const dateInputStyle: React.CSSProperties = {
   fontSize: '11px', backgroundColor: '#fff', height: '22px'
 };
 
-function DetailModal({ capture, captures, index, onClose, onNavigate }: {
+function DetailModal({ capture, captures, index, onClose, onNavigate, onDelete }: {
   capture: Capture; captures: Capture[]; index: number;
-  onClose: () => void; onNavigate: (i: number) => void;
+  onClose: () => void; onNavigate: (i: number) => void; onDelete: (id: number) => void;
 }) {
   const ext = getExt(capture.fileName);
   const isVideo = VIDEO_EXTS.includes(ext);
@@ -130,8 +130,8 @@ function DetailModal({ capture, captures, index, onClose, onNavigate }: {
               <Button disabled={index >= captures.length - 1} onClick={() => onNavigate(index + 1)}>Next &gt;</Button>
             </div>
           </div>
-          <div style={{ flex: '0 0 200px', overflow: 'auto' }}>
-            <GroupBox label="Properties">
+          <div style={{ flex: '0 0 200px', overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+            <GroupBox label="Properties" style={{ flexGrow: 1 }}>
               <table style={{ fontSize: '11px', width: '100%', borderCollapse: 'collapse' }}>
                 <tbody>
                   {[
@@ -153,6 +153,12 @@ function DetailModal({ capture, captures, index, onClose, onNavigate }: {
                 </tbody>
               </table>
             </GroupBox>
+            <Button style={{ marginTop: '8px', width: '100%', color: '#ff0000' }}
+              onClick={() => {
+                if (window.confirm(`Delete "${capture.fileName}"? This will remove the file from disk.`)) {
+                  onDelete(capture.id);
+                }
+              }}>Delete File</Button>
           </div>
         </WindowContent>
       </Window>
@@ -426,6 +432,15 @@ function App() {
             index={selectedIndex}
             onClose={() => setSelectedCapture(null)}
             onNavigate={(i) => { setSelectedIndex(i); setSelectedCapture(captures[i]); }}
+            onDelete={(id) => {
+              fetch(`/api/experiment/${id}`, { method: 'DELETE' })
+                .then(res => { if (!res.ok) throw new Error('Delete failed'); })
+                .then(() => {
+                  setCaptures(prev => prev.filter(c => c.id !== id));
+                  setSelectedCapture(null);
+                })
+                .catch(err => { alert('Failed to delete: ' + err.message); });
+            }}
           />
         )}
       </ThemeProvider>

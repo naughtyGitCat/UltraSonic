@@ -305,5 +305,39 @@ namespace LrWallPaper.Services
             using var db = OpenDb();
             return (await db.FetchAsync<FileMD5Entity>("SELECT * FROM file_info WHERE id = @0", id)).FirstOrDefault();
         }
+
+        public async Task DeleteByIdAsync(long id)
+        {
+            using var db = OpenDb();
+            await db.ExecuteAsync("DELETE FROM file_info WHERE id = @0", id);
+        }
+
+        public async Task RenameFileAsync(long id, string newFilePath, string newFileName)
+        {
+            using var conn = new SqliteConnection(_connectionString);
+            conn.Open();
+            var cmd = conn.CreateCommand();
+            cmd.CommandText = "UPDATE file_info SET fullpath = @fullpath, filepath = @filepath, filename = @filename, update_time = @update_time WHERE id = @id";
+            cmd.Parameters.Add(new SqliteParameter("@fullpath", Path.Join(newFilePath, newFileName)));
+            cmd.Parameters.Add(new SqliteParameter("@filepath", newFilePath));
+            cmd.Parameters.Add(new SqliteParameter("@filename", newFileName));
+            cmd.Parameters.Add(new SqliteParameter("@update_time", $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}"));
+            cmd.Parameters.Add(new SqliteParameter("@id", id));
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        public async Task<List<FileMD5Entity>> GetFilesWithDuplicateSuffix()
+        {
+            using var db = OpenDb();
+            // Match filenames like IMG_001(1).JPG, IMG_001(2).HEIC, IMG_001_1.JPG, IMG_001_2.CR2
+            var sql = "SELECT * FROM file_info WHERE filename GLOB '*([0-9]*)*.*' OR filename GLOB '*_[0-9].*' OR filename GLOB '*_[0-9][0-9].*'";
+            return await db.FetchAsync<FileMD5Entity>(sql);
+        }
+
+        public async Task<FileMD5Entity?> FindByFullPathAsync(string fullpath)
+        {
+            using var db = OpenDb();
+            return (await db.FetchAsync<FileMD5Entity>("SELECT * FROM file_info WHERE fullpath = @0", fullpath)).FirstOrDefault();
+        }
     }
 }

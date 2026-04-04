@@ -9,10 +9,12 @@ public class ExperimentController : ControllerBase
 {
     private readonly ILogger<ExperimentController> _logger;
     private readonly FileMD5Manager _md5Manager;
-    public ExperimentController(ILogger<ExperimentController> logger, FileMD5Manager md5Manager)
+    private readonly AgentManager _agentManager;
+    public ExperimentController(ILogger<ExperimentController> logger, FileMD5Manager md5Manager, AgentManager agentManager)
     {
         _logger = logger;
         _md5Manager = md5Manager;
+        _agentManager = agentManager;
     }
 
     [HttpGet("{days:int}")]
@@ -52,5 +54,40 @@ public class ExperimentController : ControllerBase
         var capture = await _md5Manager.GetCaptureByIdAsync(id);
         if (capture == null) return NotFound();
         return Ok(capture);
+    }
+
+    [HttpDelete("{id:long}")]
+    public async Task<IActionResult> Delete(long id)
+    {
+        var capture = await _md5Manager.GetCaptureByIdAsync(id);
+        if (capture == null) return NotFound();
+
+        // Delete physical file
+        if (string.IsNullOrEmpty(capture.AgentId) || capture.AgentId == "local")
+        {
+            if (System.IO.File.Exists(capture.FileFullPath))
+                System.IO.File.Delete(capture.FileFullPath);
+        }
+        else
+        {
+            // Notify Agent to delete
+            var agents = await _agentManager.GetAllAgentsAsync();
+            var agent = agents.FirstOrDefault(a => a.Id == capture.AgentId);
+            if (agent != null && !string.IsNullOrEmpty(agent.Endpoint))
+            {
+                try
+                {
+                    var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                    await client.DeleteAsync($"{agent.Endpoint.TrimEnd('/')}/api/agent/file?path={Uri.EscapeDataString(capture.FileFullPath)}");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to notify Agent to delete file {Path}", capture.FileFullPath);
+                }
+            }
+        }
+
+        await _md5Manager.DeleteByIdAsync(id);
+        return Ok();
     }
 }

@@ -79,4 +79,18 @@ app.MapGet("/api/agent/image", (string path, AgentState agentState) =>
     return Results.File(path, contentType, enableRangeProcessing: true);
 });
 
+// File delete endpoint for Master to request file deletion
+app.MapDelete("/api/agent/file", (string path, AgentState agentState) =>
+{
+    if (!agentState.IsRequestEnabled)
+        return Results.StatusCode(503);
+    if (string.IsNullOrEmpty(path))
+        return Results.BadRequest();
+    if (!System.IO.File.Exists(path))
+        return Results.NotFound();
+
+    System.IO.File.Delete(path);
+    return Results.Ok();
+});
+
 app.Run();

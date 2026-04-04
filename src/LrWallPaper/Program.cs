@@ -38,6 +38,7 @@ class Program
         builder.Services.AddHttpClient("ClusterClient");
         builder.Services.AddSingleton<MasterReplicationService>();
         builder.Services.AddHostedService<MasterReplicationJob>();
+        builder.Services.AddHostedService<FileRenameJob>();
         builder.Services.AddSingleton<MasterTrayIconManager>();
         
         builder.Services.AddControllers();
