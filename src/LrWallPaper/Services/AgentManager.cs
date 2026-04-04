@@ -18,33 +18,38 @@ public record AgentEntity
 
 public class AgentManager
 {
-    private readonly IDatabase _database;
     private readonly ILogger<AgentManager> _logger;
+    private readonly string _connectionString;
+
+    private IDatabase OpenDb() => new Database(_connectionString, DatabaseType.SQLite, SqliteFactory.Instance);
 
     public AgentManager(ILogger<AgentManager> logger)
     {
         _logger = logger;
         var dbPath = Path.Combine(AppContext.BaseDirectory, "ultrasonic.db");
-        _database = new Database($"Data Source={dbPath}", DatabaseType.SQLite, SqliteFactory.Instance);
+        _connectionString = $"Data Source={dbPath}";
     }
 
     public async Task<List<AgentEntity>> GetAllAgentsAsync()
     {
-        return await _database.FetchAsync<AgentEntity>("SELECT * FROM agent_info");
+        using var db = OpenDb();
+        return await db.FetchAsync<AgentEntity>("SELECT * FROM agent_info");
     }
 
     public async Task SaveAgentAsync(AgentEntity agent)
     {
+        using var db = OpenDb();
         var sql = $"""
             INSERT OR REPLACE INTO agent_info (id, name, endpoint)
             VALUES (@0, @1, @2)
             """;
-        await _database.ExecuteAsync(sql, agent.Id, agent.Name, agent.Endpoint);
+        await db.ExecuteAsync(sql, agent.Id, agent.Name, agent.Endpoint);
     }
 
     public async Task DeleteAgentAsync(string id)
     {
+        using var db = OpenDb();
         var sql = "DELETE FROM agent_info WHERE id = @0";
-        await _database.ExecuteAsync(sql, id);
+        await db.ExecuteAsync(sql, id);
     }
 }

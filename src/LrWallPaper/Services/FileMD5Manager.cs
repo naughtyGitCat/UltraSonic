@@ -48,19 +48,21 @@ namespace LrWallPaper.Services
     }
     public class FileMD5Manager
     {
-        private readonly IDatabase _database;
         private readonly ILogger<FileMD5Manager> _logger;
         private readonly string _connectionString;
-        public FileMD5Manager(ILogger<FileMD5Manager> logger) 
+
+        private IDatabase OpenDb() => new Database(_connectionString, DatabaseType.SQLite, SqliteFactory.Instance);
+
+        public FileMD5Manager(ILogger<FileMD5Manager> logger)
         {
             _logger = logger;
             var dbPath = Path.Combine(AppContext.BaseDirectory, "ultrasonic.db");
             _connectionString = $"Data Source={dbPath}";
-            _database = new Database(_connectionString, DatabaseType.SQLite, SqliteFactory.Instance);
-            PrepareTable();
+            using var db = OpenDb();
+            PrepareTable(db);
         }
 
-        private void PrepareTable()
+        private void PrepareTable(IDatabase db)
         {
             var sql = """
                   CREATE TABLE IF NOT EXISTS file_info (
@@ -81,19 +83,19 @@ namespace LrWallPaper.Services
                   UNIQUE (filepath, filename),
                   UNIQUE (filename, file_md5)
                 );
-                
+
                 CREATE TABLE IF NOT EXISTS agent_info (
                   id TEXT PRIMARY KEY,
                   name TEXT NOT NULL,
                   endpoint TEXT NOT NULL
                 );
                 """;
-            _database.Execute( sql );
+            db.Execute(sql);
 
-            try { _database.Execute("ALTER TABLE file_info ADD COLUMN agent_id TEXT NULL;"); } catch {}
-            try { _database.Execute("UPDATE file_info SET agent_id = 'local' WHERE agent_id IS NULL;"); } catch {}
-            try { _database.Execute("ALTER TABLE file_info ADD COLUMN latitude REAL NULL;"); } catch {}
-            try { _database.Execute("ALTER TABLE file_info ADD COLUMN longitude REAL NULL;"); } catch {}
+            try { db.Execute("ALTER TABLE file_info ADD COLUMN agent_id TEXT NULL;"); } catch {}
+            try { db.Execute("UPDATE file_info SET agent_id = 'local' WHERE agent_id IS NULL;"); } catch {}
+            try { db.Execute("ALTER TABLE file_info ADD COLUMN latitude REAL NULL;"); } catch {}
+            try { db.Execute("ALTER TABLE file_info ADD COLUMN longitude REAL NULL;"); } catch {}
         }
 
         public async Task SaveFileMD5Async(FileMD5Entity file) 
@@ -160,28 +162,31 @@ namespace LrWallPaper.Services
 
         public async Task SaveFileMD5Async(string filepath,  string filename, string md5)
         {
+            using var db = OpenDb();
             var sql = $"""
-                INSERT OR REPLACE INTO 
+                INSERT OR REPLACE INTO
                 file_info (fullpath,filepath,filename,md5,create_time,update_time)
                 VALUES ('{Path.Join(filepath, filename)}', '{filepath}', '{filename.Replace("@", "@@")}', '{md5}', '{DateTime.Now:yyyy-MM-dd HH:mm:ss}',  '{DateTime.Now:yyyy-MM-dd HH:mm:ss}')
                 """;
-            await _database.ExecuteAsync(sql);
+            await db.ExecuteAsync(sql);
         }
 
         public async Task SaveFileMD5Async(string fullpath, string md5)
         {
+            using var db = OpenDb();
             var filepath = Path.GetDirectoryName(fullpath);
             var filename = Path.GetFileName(fullpath);
             var sql = $"""
-                INSERT OR REPLACE INTO 
+                INSERT OR REPLACE INTO
                 file_info (fullpath,filepath,filename,md5,create_time,update_time)
                 VALUES ('{Path.Join(filepath, filename)}', '{filepath}', '{filename.Replace("@", "@@")}', '{md5}', '{DateTime.Now:yyyy-MM-dd HH:mm:ss}',  '{DateTime.Now:yyyy-MM-dd HH:mm:ss}')
                 """;
-            await _database.ExecuteAsync(sql);
+            await db.ExecuteAsync(sql);
         }
 
-        public async Task<string> GetFileMD5Async(string filepath, string filename) 
+        public async Task<string> GetFileMD5Async(string filepath, string filename)
         {
+            using var db = OpenDb();
             var sql = $"""
                 SELECT
                     md5
@@ -190,11 +195,12 @@ namespace LrWallPaper.Services
                 WHERE
                     fullpath='{Path.Join(filepath, filename.Replace("@", "@@"))}'
                 """;
-            return (await _database.FetchAsync<string>(sql)).First();
+            return (await db.FetchAsync<string>(sql)).First();
         }
 
         public async Task<List<FileMD5Entity>> GetFileMD5EntityAsync(string filepath, string filename)
         {
+            using var db = OpenDb();
             var sql = $"""
                 SELECT
                     *
@@ -203,11 +209,12 @@ namespace LrWallPaper.Services
                 WHERE
                     fullpath='{Path.Join(filepath, filename.Replace("@", "@@"))}'
                 """;
-            return await _database.FetchAsync<FileMD5Entity>(sql);
+            return await db.FetchAsync<FileMD5Entity>(sql);
         }
 
         public async Task<List<FileMD5Entity>> GetFileMD5EntityAsync(string filename)
         {
+            using var db = OpenDb();
             var sql = $"""
                 SELECT
                     *
@@ -216,47 +223,51 @@ namespace LrWallPaper.Services
                 WHERE
                     filename=@0
                 """;
-            
-            return await _database.FetchAsync<FileMD5Entity>(sql, filename);
+            return await db.FetchAsync<FileMD5Entity>(sql, filename);
         }
 
-        public async Task DeleteFileMD5Async(string filepath, string filename) 
+        public async Task DeleteFileMD5Async(string filepath, string filename)
         {
+            using var db = OpenDb();
             var sql = $"""
                 DELETE FROM
                     file_info
                 WHERE
                     fullpath='{Path.Join(filepath, filename.Replace("@", "@@"))}'
                 """;
-            await _database.ExecuteAsync(sql);
+            await db.ExecuteAsync(sql);
         }
 
         public async Task<List<FileMD5Entity>> GetPagedCapturesAsync(int page, int pageSize)
         {
+            using var db = OpenDb();
             var sql = "SELECT * FROM file_info ORDER BY capture_time DESC LIMIT @0 OFFSET @1";
-            return await _database.FetchAsync<FileMD5Entity>(sql, pageSize, (page - 1) * pageSize);
+            return await db.FetchAsync<FileMD5Entity>(sql, pageSize, (page - 1) * pageSize);
         }
 
         public async Task<bool> FileExistsAsync(string filename, long fileSize)
         {
+            using var db = OpenDb();
             var sql = "SELECT COUNT(1) FROM file_info WHERE filename = @0 AND file_size = @1";
-            var count = await _database.ExecuteScalarAsync<int>(sql, filename, fileSize);
+            var count = await db.ExecuteScalarAsync<int>(sql, filename, fileSize);
             return count > 0;
         }
 
         public async Task<List<FileMD5Entity>> GetRecentCapturesAsync(TimeSpan offset)
         {
+            using var db = OpenDb();
             var since = DateTime.Now - offset;
             var sql = "SELECT * FROM file_info WHERE capture_time >= @0 ORDER BY capture_time DESC";
-            return await _database.FetchAsync<FileMD5Entity>(sql, since.ToString("yyyy-MM-dd HH:mm:ss"));
+            return await db.FetchAsync<FileMD5Entity>(sql, since.ToString("yyyy-MM-dd HH:mm:ss"));
         }
 
         public async Task<object> GetFilterOptionsAsync()
         {
-            var makers = await _database.FetchAsync<string>("SELECT DISTINCT camera_maker FROM file_info WHERE camera_maker != '' ORDER BY camera_maker");
-            var models = await _database.FetchAsync<string>("SELECT DISTINCT camera_model FROM file_info WHERE camera_model != '' ORDER BY camera_model");
-            var agents = await _database.FetchAsync<string>("SELECT DISTINCT agent_id FROM file_info ORDER BY agent_id");
-            var types = await _database.FetchAsync<string>(
+            using var db = OpenDb();
+            var makers = await db.FetchAsync<string>("SELECT DISTINCT camera_maker FROM file_info WHERE camera_maker != '' ORDER BY camera_maker");
+            var models = await db.FetchAsync<string>("SELECT DISTINCT camera_model FROM file_info WHERE camera_model != '' ORDER BY camera_model");
+            var agents = await db.FetchAsync<string>("SELECT DISTINCT agent_id FROM file_info ORDER BY agent_id");
+            var types = await db.FetchAsync<string>(
                 "SELECT DISTINCT LOWER(SUBSTR(filename, INSTR(filename, '.'))) AS ext FROM file_info WHERE INSTR(filename, '.') > 0 ORDER BY ext");
             return new { cameraMakers = makers, cameraModels = models, fileTypes = types, agentIds = agents };
         }
@@ -268,6 +279,7 @@ namespace LrWallPaper.Services
             DateTime? dateFrom, DateTime? dateTo,
             bool? hasGps)
         {
+            using var db = OpenDb();
             var conditions = new List<string>();
             var parameters = new List<object>();
             var idx = 0;
@@ -285,12 +297,13 @@ namespace LrWallPaper.Services
             parameters.Add((page - 1) * pageSize);
 
             var sql = $"SELECT * FROM file_info {where} ORDER BY capture_time DESC LIMIT @{idx} OFFSET @{idx + 1}";
-            return await _database.FetchAsync<FileMD5Entity>(sql, parameters.ToArray());
+            return await db.FetchAsync<FileMD5Entity>(sql, parameters.ToArray());
         }
 
         public async Task<FileMD5Entity?> GetCaptureByIdAsync(long id)
         {
-            return (await _database.FetchAsync<FileMD5Entity>("SELECT * FROM file_info WHERE id = @0", id)).FirstOrDefault();
+            using var db = OpenDb();
+            return (await db.FetchAsync<FileMD5Entity>("SELECT * FROM file_info WHERE id = @0", id)).FirstOrDefault();
         }
     }
 }
