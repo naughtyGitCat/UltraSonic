@@ -17,6 +17,9 @@ public record AgentEntity
 
     [Column("version")]
     public string Version { get; set; } = string.Empty;
+
+    [Column("last_seen")]
+    public DateTime? LastSeen { get; set; }
 }
 
 public class AgentManager
@@ -43,11 +46,12 @@ public class AgentManager
     {
         using var db = OpenDb();
         try { db.Execute("ALTER TABLE agent_info ADD COLUMN version TEXT NOT NULL DEFAULT '';"); } catch {}
+        try { db.Execute("ALTER TABLE agent_info ADD COLUMN last_seen DATETIME NULL;"); } catch {}
         var sql = $"""
-            INSERT OR REPLACE INTO agent_info (id, name, endpoint, version)
-            VALUES (@0, @1, @2, @3)
+            INSERT OR REPLACE INTO agent_info (id, name, endpoint, version, last_seen)
+            VALUES (@0, @1, @2, @3, @4)
             """;
-        await db.ExecuteAsync(sql, agent.Id, agent.Name, agent.Endpoint, agent.Version);
+        await db.ExecuteAsync(sql, agent.Id, agent.Name, agent.Endpoint, agent.Version, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
     }
 
     public async Task DeleteAgentAsync(string id)

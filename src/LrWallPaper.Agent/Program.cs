@@ -79,6 +79,8 @@ app.MapGet("/api/agent/image", (string path, AgentState agentState) =>
     return Results.File(path, contentType, enableRangeProcessing: true);
 });
 
+app.MapGet("/api/agent/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.Now }));
+
 app.MapGet("/api/agent/version", () =>
 {
     var asm = System.Reflection.Assembly.GetExecutingAssembly();

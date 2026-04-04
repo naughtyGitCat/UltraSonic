@@ -62,6 +62,7 @@ interface Agent {
   name: string;
   endpoint: string;
   version?: string;
+  lastSeen?: string;
 }
 
 function formatFileSize(bytes?: number): string {
@@ -193,6 +194,8 @@ function App() {
   // Agent State
   const [agents, setAgents] = useState<Agent[]>([]);
   const [masterVersion, setMasterVersion] = useState('');
+  const [masterHealth, setMasterHealth] = useState<'healthy' | 'unhealthy' | 'checking'>('checking');
+  const [agentHealth, setAgentHealth] = useState<Record<string, 'healthy' | 'unhealthy' | 'checking'>>({});
   const [newAgentName, setNewAgentName] = useState('');
   const [newAgentIp, setNewAgentIp] = useState('');
 
@@ -268,8 +271,22 @@ function App() {
     }
   }, [activeTab]);
 
+  const checkHealth = (agents: Agent[]) => {
+    setMasterHealth('checking');
+    fetch('/api/health', { signal: AbortSignal.timeout(3000) })
+      .then(r => r.ok ? setMasterHealth('healthy') : setMasterHealth('unhealthy'))
+      .catch(() => setMasterHealth('unhealthy'));
+    const h: Record<string, 'healthy' | 'unhealthy' | 'checking'> = {};
+    agents.forEach(a => { h[a.id] = 'checking'; });
+    setAgentHealth(h);
+    agents.forEach(a => {
+      fetch(`${a.endpoint.replace(/\/$/, '')}/api/agent/health`, { signal: AbortSignal.timeout(3000) })
+        .then(r => setAgentHealth(prev => ({ ...prev, [a.id]: r.ok ? 'healthy' : 'unhealthy' })))
+        .catch(() => setAgentHealth(prev => ({ ...prev, [a.id]: 'unhealthy' })));
+    });
+  };
   const fetchAgents = () => {
-    fetch('/api/agent').then(r => r.json()).then(setAgents).catch(console.error);
+    fetch('/api/agent').then(r => r.json()).then((data: Agent[]) => { setAgents(data); checkHealth(data); }).catch(console.error);
   };
   const handleAddAgent = () => {
     fetch('/api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newAgentName, endpoint: newAgentIp }) })
@@ -403,26 +420,33 @@ function App() {
                       <TableHead>
                         <TableRow>
                           <TableHeadCell>Name</TableHeadCell>
-                          <TableHeadCell>UUID</TableHeadCell>
-                          <TableHeadCell>API Endpoint</TableHeadCell>
+                          <TableHeadCell>Endpoint</TableHeadCell>
                           <TableHeadCell>Version</TableHeadCell>
+                          <TableHeadCell>Health</TableHeadCell>
+                          <TableHeadCell>Heartbeat</TableHeadCell>
                           <TableHeadCell>Actions</TableHeadCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         <TableRow>
                           <TableDataCell>Master Local</TableDataCell>
-                          <TableDataCell>local</TableDataCell>
                           <TableDataCell>127.0.0.1</TableDataCell>
                           <TableDataCell>{masterVersion}</TableDataCell>
+                          <TableDataCell style={{ color: masterHealth === 'healthy' ? 'green' : masterHealth === 'unhealthy' ? 'red' : '#666' }}>
+                            {masterHealth === 'healthy' ? 'OK' : masterHealth === 'unhealthy' ? 'DOWN' : '...'}
+                          </TableDataCell>
+                          <TableDataCell>-</TableDataCell>
                           <TableDataCell>Built-in</TableDataCell>
                         </TableRow>
                         {agents.map(agent => (
                           <TableRow key={agent.id}>
                             <TableDataCell>{agent.name}</TableDataCell>
-                            <TableDataCell>{agent.id}</TableDataCell>
                             <TableDataCell>{agent.endpoint}</TableDataCell>
                             <TableDataCell>{agent.version || '-'}</TableDataCell>
+                            <TableDataCell style={{ color: agentHealth[agent.id] === 'healthy' ? 'green' : agentHealth[agent.id] === 'unhealthy' ? 'red' : '#666' }}>
+                              {agentHealth[agent.id] === 'healthy' ? 'OK' : agentHealth[agent.id] === 'unhealthy' ? 'DOWN' : '...'}
+                            </TableDataCell>
+                            <TableDataCell>{agent.lastSeen ? new Date(agent.lastSeen).toLocaleString() : '-'}</TableDataCell>
                             <TableDataCell><Button onClick={() => handleDeleteAgent(agent.id)}>Delete</Button></TableDataCell>
                           </TableRow>
                         ))}

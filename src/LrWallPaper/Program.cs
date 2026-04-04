@@ -75,6 +75,8 @@ class Program
 
         app.MapControllers();
 
+        app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.Now }));
+
         app.MapGet("/api/version", () =>
         {
             var asm = System.Reflection.Assembly.GetExecutingAssembly();
