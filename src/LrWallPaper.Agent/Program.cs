@@ -68,7 +68,8 @@ app.MapGet("/api/agent/image", (string path, AgentState agentState) =>
         _ => "application/octet-stream"
     };
 
-    if (ext == ".heic")
+    var needsConvert = new HashSet<string> { ".heic", ".cr2", ".cr3", ".nef", ".nrw", ".arw", ".sr2", ".srf", ".dng", ".raf", ".pef", ".rw2", ".orf" };
+    if (needsConvert.Contains(ext))
     {
         using var image = new MagickImage(path);
         var ms = new MemoryStream();

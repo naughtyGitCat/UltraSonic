@@ -108,10 +108,12 @@ class Program
                 _ => "application/octet-stream"
             };
 
+            var needsConvert = new HashSet<string> { ".heic", ".cr2", ".cr3", ".nef", ".nrw", ".arw", ".sr2", ".srf", ".dng", ".raf", ".pef", ".rw2", ".orf" };
+
             if (string.IsNullOrEmpty(agentId) || agentId == "local")
             {
                 if (!System.IO.File.Exists(path)) return Results.NotFound();
-                if (ext == ".heic")
+                if (needsConvert.Contains(ext))
                 {
                     using var image = new MagickImage(path);
                     var ms = new MemoryStream();
@@ -133,7 +135,7 @@ class Program
                 var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
                 response.EnsureSuccessStatusCode();
                 var stream = await response.Content.ReadAsStreamAsync();
-                var proxyContentType = ext == ".heic" ? "image/jpeg" : contentType;
+                var proxyContentType = needsConvert.Contains(ext) ? "image/jpeg" : contentType;
                 return Results.File(stream, proxyContentType, enableRangeProcessing: true);
             } catch {
                 return Results.StatusCode(502);
