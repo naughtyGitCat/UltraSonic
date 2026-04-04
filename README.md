@@ -1,30 +1,47 @@
 # UltraSonic
 
-A distributed local photo / RAW management platform. The **Master-Agent** architecture builds a unified metadata index across multiple Windows machines, with automatic import from iOS devices and removable storage, MD5 de-duplication, EXIF parsing, multi-node P2P sync, and a React95-style web gallery.
+A distributed local photo / RAW management platform. The **Master-Agent** architecture builds a unified metadata index across multiple Windows machines, with automatic import from iOS devices and removable storage, GPS extraction, MD5 de-duplication, server-side RAW/HEIC conversion, and a React95-style web UI with gallery filters, folder browser, and configuration management.
 
-> 中文文档：[README.zh.md](README.zh.md)
+> Chinese: [README.zh.md](README.zh.md)
 
 ---
 
 ## Features
 
-- **Distributed scanning**: Agent nodes periodically scan local folders and push EXIF metadata + MD5 fingerprints to Master in batches
-- **iOS import**: Access `DCIM` over USB AFC, archive by capture date, support Apple Live Photo `.MOV` metadata
-- **Removable storage import**: Auto-detect SD cards / cameras with DCIM folders, copy and archive files
-- **MD5 de-duplication**: `UNIQUE (filename, file_md5)` constraint prevents duplicates; Agents pre-check with Master before downloading
-- **Multi-Master Gossip sync**: Configure Peer nodes for eventual-consistency replication via application-layer P2P broadcast
-- **Web gallery**: React95-style frontend embedded in Master, browse by date or page
-- **Image proxy**: Master transparently proxies image streams from any Agent — frontend needs no topology awareness
-- **MCP integration**: Model Context Protocol tool endpoint reserved for AI client integration
-- **Windows tray**: Both Agent and Master provide tray icons with pause/resume, startup toggle, and config editing
-- **Auto wallpaper** (optional): `BusinessJob` sets recent captures as the Windows desktop wallpaper
+### Media Management
+- **Gallery with filters**: Browse by camera brand/model, file type, date range, GPS, media type (Photos/Videos)
+- **Detail view**: Click any thumbnail for full-size preview with metadata panel (EXIF, GPS, lens, file size)
+- **Folder browser**: Tree-view navigation, multi-select files, batch move/delete operations
+- **RAW/HEIC support**: Server-side conversion to JPEG via Magick.NET (CR2, CR3, DNG, NEF, ARW, HEIC, etc.)
+- **Video thumbnails**: `<video>` tag with `#t=0.5` for first-frame preview
+
+### Distributed Architecture
+- **Agent scanning**: Agent nodes periodically scan local folders and push EXIF/GPS metadata + MD5 fingerprints to Master
+- **iOS import**: USB AFC access to DCIM, auto-filter PNG screenshots, archive by capture date
+- **Removable storage import**: Auto-detect SD cards/cameras, configurable copy or move transfer mode, screenshot filtering
+- **MD5 de-duplication**: `UNIQUE (filename, file_md5)` constraint; Agents pre-check with Master before downloading
+- **Multi-Master Gossip sync**: Eventual-consistency replication via application-layer P2P broadcast
+- **Auto agent registration**: Agents register with Master on each scan cycle (actual LAN IP, version, heartbeat)
+
+### Operations
+- **Node management**: Health check, version display (git commit hash), rescan trigger, agent delete
+- **Configuration UI**: Read/edit Master and Agent `appsettings.json` from the web interface
+- **File rename job**: Background task removes duplicate suffixes like `(1)`, `_2` with year/month disambiguation
+- **File deletion**: Delete by record ID, removes physical file (local or via Agent) + database record
+- **File migration**: Move files between directories or across Agents
+
+### Infrastructure
+- **Image proxy**: Master transparently proxies image/video streams from any Agent
+- **MCP integration**: Model Context Protocol tool endpoint for AI client integration
+- **Windows tray**: Both Agent and Master provide tray icons with pause/resume and startup toggle
+- **CI/CD**: GitHub Actions builds MSI installers on every push, auto-creates releases
 
 ---
 
 ## Requirements
 
 - **OS**: Windows 10 / 11 (64-bit)
-- **Runtime**: .NET 10 Runtime (self-contained in MSI installer — no separate install needed)
+- **Runtime**: .NET 10 (self-contained in MSI installer)
 - **iOS import**: Trust the computer on the device and maintain USB connection
 
 ---
@@ -33,166 +50,126 @@ A distributed local photo / RAW management platform. The **Master-Agent** archit
 
 ### Option 1: MSI Installer (Recommended)
 
-Download the latest release from [GitHub Releases](https://github.com/naughtyGitCat/UltraSonic/releases):
+Download from [GitHub Releases](https://github.com/naughtyGitCat/UltraSonic/releases):
 
-- `UltraSonic.LrWallPaper.msi` — Master node
-- `UltraSonic.LrWallPaper.Agent.msi` — Agent node
+- `UltraSonic.LrWallPaper.msi` -- Master node
+- `UltraSonic.LrWallPaper.Agent.msi` -- Agent node
 
-Install both, then start each program — a tray icon will appear for each.
+Install both, then start each program. Open `http://localhost:5281` in your browser.
 
 ### Option 2: Build from Source
 
 ```powershell
 git clone https://github.com/naughtyGitCat/UltraSonic
 
-# Terminal 1 — Master
+# Build frontend
+cd src/LrWallPaper.React && npm ci && npm run build && cd ../..
+
+# Terminal 1 - Master
 cd src/LrWallPaper && dotnet run
 
-# Terminal 2 — Agent
+# Terminal 2 - Agent
 cd src/LrWallPaper.Agent && dotnet run
-
-# Terminal 3 — Frontend (dev only)
-cd src/LrWallPaper.React && npm install && npm run dev
 ```
 
-On first run `ultrasonic.db` is created automatically in the program directory. Swagger UI is available at `http://localhost:5281/swagger` in development mode. The production frontend is served directly from `http://localhost:5281`.
+On first run `ultrasonic.db` is created automatically. The Agent auto-generates a persistent `AgentId` on first startup.
 
 ---
 
 ## Configuration
 
-All paths are configured via `appsettings.json` — no source changes needed.
+All settings can be edited from the **Node Config** tab in the web UI, or directly in `appsettings.json`.
 
-### Master (`src/LrWallPaper/appsettings.json`)
+### Master
 
 ```json
 {
-  "Urls": "http://localhost:5281",
-  "MasterCluster": {
-    "Peers": []
-  },
+  "Urls": "http://0.0.0.0:5281",
+  "MasterCluster": { "Peers": [] },
   "UltraSonic": {
-    "AppleImport": {
-      "TempDirectory": "F:\\",
-      "ArchiveDirectory": "D:\\Photograph"
-    },
-    "ArchivePaths": {
-      "Current": "D:/Photograph",
-      "History": "X:/Photograph"
-    }
+    "LocalScan": { "RootDirectories": [], "SkipDirectories": [] },
+    "AppleImport": { "TempDirectory": "", "ArchiveDirectory": "" },
+    "Lightroom": { "CatalogPath": "" },
+    "ArchivePaths": { "Current": "", "History": "" }
   }
 }
 ```
 
-For multi-node clusters, add peer addresses to `Peers`, e.g. `["http://192.168.1.10:5281"]`.
-
-### Agent (`src/LrWallPaper.Agent/appsettings.json`)
+### Agent
 
 ```json
 {
-  "Urls": "http://localhost:5282",
+  "Urls": "http://0.0.0.0:5282",
   "DeviceSync": {
-    "AppleImport": {
-      "TempDirectory": "F:\\",
-      "ArchiveDirectory": "D:\\Photograph"
-    },
-    "GenericImport": {
-      "ArchiveDirectory": "D:\\Photograph"
-    }
+    "AppleImport": { "TempDirectory": "", "ArchiveDirectory": "" },
+    "GenericImport": { "ArchiveDirectory": "", "TransferMode": "copy" }
   },
   "Agent": {
-    "AgentId": "my-desktop",
+    "AgentId": "auto",
     "MasterEndpoint": "http://localhost:5281",
-    "ScanPaths": ["D:\\Photograph"],
+    "ScanPaths": [],
     "ScanIntervalMinutes": 60
   }
 }
 ```
 
-Set `AgentId` to a stable string (e.g. machine hostname) so the identity persists across restarts.
+| Key | Description |
+|---|---|
+| `AgentId` | Set to `"auto"` to generate and persist a UUID on first run |
+| `TransferMode` | `"copy"` (keep source) or `"move"` (delete source after import) |
+| `MasterCluster.Peers` | Array of peer Master URLs for Gossip sync |
 
 ---
 
-## Architecture
+## Web UI
 
-```
-iOS / SD Card ──USB──► LrWallPaper.Agent ──HTTP Push──► LrWallPaper (Master)
-Local folders ────────► (port 5282)                      (port 5281)
-                                                               │
-                                                        SQLite persistence
-                                                               │
-                                                        Gossip sync ──► Peer Master
-```
+Three tabs in the React95-style interface:
 
-See [`docs/SDD.md`](docs/SDD.md) for the full architecture, API reference, and data schema.
+| Tab | Features |
+|---|---|
+| **Gallery** | Filter by brand/model/type/source/date/GPS, All/Photos/Videos toggle, infinite scroll, click for detail modal with prev/next navigation and delete |
+| **Node Config** | Agent table (IP, port, version, health, heartbeat), Rescan/Delete buttons, Refresh, click row to edit config with Save |
+| **Folders** | Tree-view folder browser, file grid with multi-select, Move To dialog, Delete Folder |
 
 ---
 
-## Background Jobs
+## API Reference
 
-### Agent
-
-| Job | Default | Description |
-|---|---|---|
-| `ScanAndPushJob` | Enabled | Periodically scans local directories and pushes metadata to Master |
-| `DeviceSyncAppleJob` | Enabled | Imports and archives photos from iOS devices |
-| `DeviceSyncGenericJob` | Enabled | Imports and archives photos from removable drives (SD cards) |
-
-### Master
-
-| Job | Default | Description |
-|---|---|---|
-| `MasterReplicationJob` | Enabled | Gossip-broadcasts new records to Peer Master nodes |
-| `BusinessJob` | Commented | Wallpaper rotation — uncomment in `Program.cs` to enable |
-| `SyncRemovableJob` | Commented | Device enumeration monitor (superseded by Agent) |
-
----
-
-## Web API
+See [`docs/SDD.md`](docs/SDD.md) for the complete API specification. Key endpoints:
 
 | Endpoint | Description |
 |---|---|
-| `POST /api/master/sync` | Receive file metadata batch from Agent |
-| `GET /api/master/file-exists?filename=&size=` | Duplicate pre-check (called by Agent) |
-| `GET /api/experiment/{days}` | Files captured within the last N days |
-| `GET /api/experiment/page?page=&pageSize=` | Paged file records |
-| `GET /api/image?path=&agentId=` | Image stream proxy (transparently forwards to Agent) |
-| `GET /api/agent` | List all registered Agents |
-
-Use Swagger UI at `http://localhost:5281/swagger` (development mode) to explore all endpoints.
-
----
-
-## Data Storage
-
-- **Database**: SQLite (`ultrasonic.db`, auto-created on first run)
-- **Main table** `file_info`: path, filename, size, MD5, capture time, camera info, source Agent ID
-- **Unique constraints**: `fullpath`, `(filepath, filename)`, `(filename, file_md5)`
-- **Write strategy**: `INSERT OR REPLACE` (upsert — naturally idempotent)
+| `GET /api/experiment/gallery` | Filtered paginated query (brand, model, type, date, GPS, mediaType) |
+| `GET /api/experiment/filters` | Distinct filter option values |
+| `GET /api/experiment/folders` | Folder summary list |
+| `DELETE /api/experiment/{id}` | Delete file by record ID (disk + DB) |
+| `POST /api/experiment/move` | Batch move files |
+| `GET /api/agent/status` | All nodes health/version (Master-side check) |
+| `GET /api/image?path=&agentId=` | Image/video proxy with RAW-to-JPEG conversion |
+| `GET/PUT /api/master/config` | Read/write Master config |
+| `GET/PUT /api/agent/{id}/config` | Read/write Agent config (proxied via Master) |
 
 ---
 
 ## FAQ
 
-**`FatalPairingException` on iOS connect**  
-Select "Trust This Computer" on the device and retry. If it persists, check the cable and Apple Mobile Device drivers.
+**iOS connect fails with `FatalPairingException`**
+Select "Trust This Computer" on the device. Check cable and Apple Mobile Device drivers.
 
-**Agent is not scanning files**  
-Verify `Agent:ScanPaths` directories exist and are accessible. Check the tray icon to confirm scanning is not paused.
+**Agent not scanning**
+Verify `Agent:ScanPaths` directories exist. Check tray icon to confirm scanning is not paused.
 
-**Device import not working**  
-Confirm `DeviceSync:AppleImport:ArchiveDirectory` is set and the directory is writable. Check logs at `logs/agent-*.txt`.
+**Photos show as broken images**
+RAW/HEIC files require Magick.NET conversion. Ensure the server has started successfully and check logs.
 
-**"Access to the cloud file is denied"**  
-Expected behavior — the tool skips cloud-synced files that are not downloaded locally.
+**GPS shows as `-` for existing photos**
+GPS extraction was added later. Use the **Rescan** button in Node Config to re-scan and extract GPS data.
 
-**Wallpaper not changing**  
-Uncomment `BusinessJob` in `src/LrWallPaper/Program.cs` and rebuild. Windows-only feature.
+**Cannot delete files (500 error)**
+The `ultrasonic.db` file in `Program Files` may be read-only. Grant write permission: `icacls "C:\Program Files\UltraSonic\LrWallPaper" /grant Users:F`
 
 ---
 
-## References
+## License
 
-- EXIF spec: https://www.media.mit.edu/pia/Research/deepview/exif.html
-- MetadataExtractor (.NET): https://github.com/drewnoakes/metadata-extractor-dotnet
-- Netimobiledevice: https://github.com/artehe/Netimobiledevice
+MIT
