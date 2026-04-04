@@ -67,7 +67,7 @@ app.MapGet("/api/agent/image", (string path, AgentState agentState) =>
         _ => "application/octet-stream"
     };
 
-    return Results.File(path, contentType);
+    return Results.File(path, contentType, enableRangeProcessing: true);
 });
 
 app.Run();

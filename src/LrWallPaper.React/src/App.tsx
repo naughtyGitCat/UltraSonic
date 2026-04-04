@@ -48,14 +48,20 @@ interface Agent {
   endpoint: string;
 }
 
-function HeicImage({ src, alt, style }: { src: string; alt: string; style: React.CSSProperties }) {
+const VIDEO_EXTS = ['.mp4', '.mov', '.avi', '.mkv', '.mts'];
+
+function MediaThumbnail({ src, alt, style }: { src: string; alt: string; style: React.CSSProperties }) {
+  const ext = alt.toLowerCase().replace(/.*(\.\w+)$/, '$1');
+  const isHeic = ext === '.heic';
+  const isVideo = VIDEO_EXTS.includes(ext);
+
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
-  const imgRef = useRef<HTMLDivElement>(null);
+  const elRef = useRef<HTMLDivElement>(null);
   const converting = useRef(false);
 
   useEffect(() => {
-    if (!alt.toLowerCase().endsWith('.heic')) return;
-    const el = imgRef.current;
+    if (!isHeic) return;
+    const el = elRef.current;
     if (!el) return;
     const obs = new IntersectionObserver(([entry]) => {
       if (entry.isIntersecting && !converting.current) {
@@ -73,20 +79,27 @@ function HeicImage({ src, alt, style }: { src: string; alt: string; style: React
     });
     obs.observe(el);
     return () => obs.disconnect();
-  }, [src, alt]);
+  }, [src, isHeic]);
 
   useEffect(() => {
     return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [objectUrl]);
 
-  const isHeic = alt.toLowerCase().endsWith('.heic');
-  if (!isHeic) return <img src={src} alt={alt} loading="lazy" style={style} />;
+  if (isVideo) {
+    return <video src={src} muted preload="metadata" style={style} />;
+  }
 
-  return (
-    <div ref={imgRef} style={style}>
-      {objectUrl ? <img src={objectUrl} alt={alt} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666', fontSize: '11px' }}>Loading HEIC...</div>}
-    </div>
-  );
+  if (isHeic) {
+    return (
+      <div ref={elRef} style={style}>
+        {objectUrl
+          ? <img src={objectUrl} alt={alt} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666', fontSize: '11px' }}>Loading HEIC...</div>}
+      </div>
+    );
+  }
+
+  return <img src={src} alt={alt} loading="lazy" style={style} />;
 }
 
 function App() {
@@ -221,7 +234,7 @@ function App() {
                                 padding: '4px', textAlign: 'center', backgroundColor: '#c0c0c0'
                               }}
                             >
-                              <HeicImage
+                              <MediaThumbnail
                                 src={imgSrc}
                                 alt={pic.fileName}
                                 style={{ width: '100%', height: '160px', objectFit: 'cover', border: '2px inset #dfdfdf', backgroundColor: '#000' }}

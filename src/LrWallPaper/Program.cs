@@ -99,7 +99,7 @@ class Program
             if (string.IsNullOrEmpty(agentId) || agentId == "local")
             {
                 if (!System.IO.File.Exists(path)) return Results.NotFound();
-                return Results.File(path, contentType);
+                return Results.File(path, contentType, enableRangeProcessing: true);
             }
 
             // Remote agent fetch
@@ -107,10 +107,13 @@ class Program
             var agent = agents.FirstOrDefault(a => a.Id == agentId);
             if (agent == null || string.IsNullOrEmpty(agent.Endpoint)) return Results.NotFound();
 
-            var client = new HttpClient();
+            var client = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
             try {
-                var stream = await client.GetStreamAsync($"{agent.Endpoint.TrimEnd('/')}/api/agent/image?path={Uri.EscapeDataString(path)}");
-                return Results.File(stream, contentType);
+                var request = new HttpRequestMessage(HttpMethod.Get, $"{agent.Endpoint.TrimEnd('/')}/api/agent/image?path={Uri.EscapeDataString(path)}");
+                var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+                response.EnsureSuccessStatusCode();
+                var stream = await response.Content.ReadAsStreamAsync();
+                return Results.File(stream, contentType, enableRangeProcessing: true);
             } catch {
                 return Results.StatusCode(502);
             }
