@@ -168,6 +168,66 @@ function DetailModal({ capture, captures, index, onClose, onNavigate, onDelete }
   );
 }
 
+interface FolderSummaryI { filePath: string; agentId: string; fileCount: number; totalSize: number; }
+interface TreeNode { name: string; fullPath: string; children: Map<string, TreeNode>; folder?: FolderSummaryI; }
+
+function buildTree(folders: FolderSummaryI[]): TreeNode {
+  const root: TreeNode = { name: '', fullPath: '', children: new Map() };
+  for (const f of folders) {
+    // Split path: "D:\Photos\2024\01" -> ["D:", "Photos", "2024", "01"]
+    const parts = f.filePath.replace(/\\/g, '/').split('/').filter(Boolean);
+    let node = root;
+    let path = '';
+    for (const part of parts) {
+      path = path ? path + '/' + part : part;
+      if (!node.children.has(part)) {
+        node.children.set(part, { name: part, fullPath: path, children: new Map() });
+      }
+      node = node.children.get(part)!;
+    }
+    node.folder = f;
+  }
+  return root;
+}
+
+function FolderTree({ folders, selectedFolder, onSelect }: {
+  folders: FolderSummaryI[]; selectedFolder: FolderSummaryI | null; onSelect: (f: FolderSummaryI) => void;
+}) {
+  const tree = buildTree(folders);
+  if (tree.children.size === 0) return <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>No folders found</div>;
+  return <div style={{ padding: '2px' }}>{Array.from(tree.children.values()).map(n => <TreeNodeView key={n.fullPath} node={n} depth={0} selectedFolder={selectedFolder} onSelect={onSelect} />)}</div>;
+}
+
+function TreeNodeView({ node, depth, selectedFolder, onSelect }: {
+  node: TreeNode; depth: number; selectedFolder: FolderSummaryI | null; onSelect: (f: FolderSummaryI) => void;
+}) {
+  const [expanded, setExpanded] = useState(depth < 2);
+  const hasChildren = node.children.size > 0;
+  const isSelected = selectedFolder?.filePath === node.folder?.filePath && selectedFolder?.agentId === node.folder?.agentId;
+  const isLeaf = node.folder != null;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', padding: '1px 2px', paddingLeft: depth * 16 + 2,
+        cursor: isLeaf ? 'pointer' : hasChildren ? 'pointer' : 'default',
+        backgroundColor: isSelected ? '#000080' : 'transparent', color: isSelected ? '#fff' : '#000' }}
+        onClick={() => { if (isLeaf && node.folder) onSelect(node.folder); if (hasChildren) setExpanded(!expanded); }}>
+        <span style={{ width: '14px', textAlign: 'center', fontSize: '10px', flexShrink: 0 }}>
+          {hasChildren ? (expanded ? '-' : '+') : ' '}
+        </span>
+        <span style={{ marginRight: '4px', fontSize: '12px' }}>{isLeaf ? '\uD83D\uDCC1' : '\uD83D\uDCC2'}</span>
+        <span style={{ flexGrow: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{node.name}</span>
+        {isLeaf && node.folder && <span style={{ color: isSelected ? '#ccc' : '#888', marginLeft: '4px', flexShrink: 0, fontSize: '10px' }}>
+          {node.folder.fileCount}
+        </span>}
+      </div>
+      {expanded && Array.from(node.children.values()).map(child =>
+        <TreeNodeView key={child.fullPath} node={child} depth={depth + 1} selectedFolder={selectedFolder} onSelect={onSelect} />
+      )}
+    </div>
+  );
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState(0);
 
@@ -189,9 +249,8 @@ function App() {
   const [mediaType, setMediaType] = useState('');
 
   // Folder State
-  interface FolderSummary { filePath: string; agentId: string; fileCount: number; totalSize: number; }
-  const [folders, setFolders] = useState<FolderSummary[]>([]);
-  const [selectedFolder, setSelectedFolder] = useState<FolderSummary | null>(null);
+  const [folders, setFolders] = useState<FolderSummaryI[]>([]);
+  const [selectedFolder, setSelectedFolder] = useState<FolderSummaryI | null>(null);
   const [folderFiles, setFolderFiles] = useState<Capture[]>([]);
   const [folderAgent, setFolderAgent] = useState('');
   const [moveTarget, setMoveTarget] = useState('');
@@ -318,7 +377,7 @@ function App() {
     const params = folderAgent ? `?agentId=${encodeURIComponent(folderAgent)}` : '';
     fetch(`/api/experiment/folders${params}`).then(r => r.json()).then(setFolders).catch(console.error);
   };
-  const fetchFolderFiles = (folder: FolderSummary) => {
+  const fetchFolderFiles = (folder: FolderSummaryI) => {
     setSelectedFolder(folder);
     setSelectedFileIds(new Set());
     const params = new URLSearchParams({ path: folder.filePath });
@@ -512,20 +571,9 @@ function App() {
                     </>}
                   </div>
                   <div style={{ display: 'flex', flexGrow: 1, minHeight: 0, gap: '8px' }}>
-                    {/* Folder list */}
+                    {/* Folder tree */}
                     <div style={{ flex: '0 0 350px', overflow: 'auto', border: '2px inset #dfdfdf', backgroundColor: '#fff', fontSize: '11px' }}>
-                      {folders.map(f => (
-                        <div key={f.filePath + f.agentId} onClick={() => fetchFolderFiles(f)}
-                          style={{ padding: '4px 6px', cursor: 'pointer', borderBottom: '1px solid #dfdfdf',
-                            backgroundColor: selectedFolder?.filePath === f.filePath && selectedFolder?.agentId === f.agentId ? '#000080' : 'transparent',
-                            color: selectedFolder?.filePath === f.filePath && selectedFolder?.agentId === f.agentId ? '#fff' : '#000' }}>
-                          <div style={{ fontWeight: 'bold', wordBreak: 'break-all' }}>{f.filePath}</div>
-                          <div style={{ color: selectedFolder?.filePath === f.filePath ? '#ccc' : '#666' }}>
-                            {f.fileCount} files, {formatFileSize(f.totalSize)}
-                          </div>
-                        </div>
-                      ))}
-                      {folders.length === 0 && <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>No folders found</div>}
+                      <FolderTree folders={folders} selectedFolder={selectedFolder} onSelect={fetchFolderFiles} />
                     </div>
                     {/* File list */}
                     <div style={{ flexGrow: 1, overflow: 'auto', border: '2px inset #dfdfdf', backgroundColor: '#fff' }}>
