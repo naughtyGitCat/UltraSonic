@@ -101,7 +101,7 @@ class Program
                 if (!System.IO.File.Exists(path)) return Results.NotFound();
                 return Results.File(path, contentType);
             }
-            
+
             // Remote agent fetch
             var agents = await agentManager.GetAllAgentsAsync();
             var agent = agents.FirstOrDefault(a => a.Id == agentId);

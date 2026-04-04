@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import heic2any from 'heic2any';
 import { createGlobalStyle, ThemeProvider } from 'styled-components';
 import { styleReset, Window, WindowHeader, WindowContent, Button, ScrollView, Tabs, Tab, TabBody, TextInput, Table, TableHead, TableRow, TableHeadCell, TableBody, TableDataCell } from 'react95';
 import original from 'react95/dist/themes/original';
@@ -45,6 +46,47 @@ interface Agent {
   id: string;
   name: string;
   endpoint: string;
+}
+
+function HeicImage({ src, alt, style }: { src: string; alt: string; style: React.CSSProperties }) {
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const imgRef = useRef<HTMLDivElement>(null);
+  const converting = useRef(false);
+
+  useEffect(() => {
+    if (!alt.toLowerCase().endsWith('.heic')) return;
+    const el = imgRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting && !converting.current) {
+        converting.current = true;
+        obs.disconnect();
+        fetch(src)
+          .then(r => r.blob())
+          .then(blob => heic2any({ blob, toType: 'image/jpeg', quality: 0.8 }))
+          .then(result => {
+            const jpeg = Array.isArray(result) ? result[0] : result;
+            setObjectUrl(URL.createObjectURL(jpeg));
+          })
+          .catch(() => setObjectUrl(src));
+      }
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [src, alt]);
+
+  useEffect(() => {
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [objectUrl]);
+
+  const isHeic = alt.toLowerCase().endsWith('.heic');
+  if (!isHeic) return <img src={src} alt={alt} loading="lazy" style={style} />;
+
+  return (
+    <div ref={imgRef} style={style}>
+      {objectUrl ? <img src={objectUrl} alt={alt} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666', fontSize: '11px' }}>Loading HEIC...</div>}
+    </div>
+  );
 }
 
 function App() {
@@ -179,10 +221,10 @@ function App() {
                                 padding: '4px', textAlign: 'center', backgroundColor: '#c0c0c0'
                               }}
                             >
-                              <img 
-                                src={imgSrc} 
-                                alt={pic.fileName} loading="lazy"
-                                style={{ width: '100%', height: '160px', objectFit: 'cover', border: '2px inset #dfdfdf', backgroundColor: '#000' }} 
+                              <HeicImage
+                                src={imgSrc}
+                                alt={pic.fileName}
+                                style={{ width: '100%', height: '160px', objectFit: 'cover', border: '2px inset #dfdfdf', backgroundColor: '#000' }}
                               />
                               <div style={{ fontSize: '11px', marginTop: '6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', padding: '2px' }}>
                                 {pic.fileName}
