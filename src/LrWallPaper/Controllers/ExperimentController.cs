@@ -65,8 +65,15 @@ public class ExperimentController : ControllerBase
         // Delete physical file
         if (string.IsNullOrEmpty(capture.AgentId) || capture.AgentId == "local")
         {
-            if (System.IO.File.Exists(capture.FileFullPath))
-                System.IO.File.Delete(capture.FileFullPath);
+            try
+            {
+                if (System.IO.File.Exists(capture.FileFullPath))
+                    System.IO.File.Delete(capture.FileFullPath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to delete local file {Path}, removing DB record only", capture.FileFullPath);
+            }
         }
         else
         {

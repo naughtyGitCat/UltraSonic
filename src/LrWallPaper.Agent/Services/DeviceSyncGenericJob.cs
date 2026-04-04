@@ -111,6 +111,9 @@ public class DeviceSyncGenericJob : BackgroundService
             || ext.Equals(".aae", StringComparison.OrdinalIgnoreCase)) return;
         if (!MediaHelpers.PossibleSuffixes.Contains(ext)) return;
 
+        // Skip screenshots: filename pattern or directory name
+        if (IsScreenshot(sourceFile, filename)) return;
+
         try
         {
             var md5 = MediaHelpers.ComputeMD5(sourceFile);
@@ -194,6 +197,22 @@ public class DeviceSyncGenericJob : BackgroundService
         {
             _logger.LogError(ex, "Failed to push generic import batch to Master");
         }
+    }
+
+    private static bool IsScreenshot(string filePath, string filename)
+    {
+        var upper = filename.ToUpperInvariant();
+        // Android/generic screenshot filename patterns
+        if (upper.StartsWith("SCREENSHOT_") || upper.StartsWith("SCREENSHOT ") || upper.StartsWith("SCREEN_"))
+            return true;
+        // Huawei/Honor patterns
+        if (upper.StartsWith("截屏") || upper.StartsWith("截图"))
+            return true;
+        // Directory-based detection: DCIM/Screenshots, Pictures/Screenshots
+        var dir = Path.GetDirectoryName(filePath) ?? "";
+        if (dir.Contains("Screenshot", StringComparison.OrdinalIgnoreCase))
+            return true;
+        return false;
     }
 
     private record FileExistsResponse(bool Exists);

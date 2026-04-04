@@ -96,6 +96,8 @@ public class DeviceSyncAppleJob : BackgroundService
                 var filename = Path.GetFileName(file);
                 if (filename.StartsWith('.') || filename.EndsWith(".aae", StringComparison.OrdinalIgnoreCase)) continue;
                 if (!MediaHelpers.PossibleSuffixes.Contains(Path.GetExtension(filename))) continue;
+                // iOS screenshots are PNG — skip to avoid unnecessary download (EXIF check below is backup)
+                if (Path.GetExtension(filename).Equals(".png", StringComparison.OrdinalIgnoreCase)) continue;
 
                 try
                 {
