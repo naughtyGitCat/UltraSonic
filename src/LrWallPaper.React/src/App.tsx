@@ -186,6 +186,17 @@ function App() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [hasGps, setHasGps] = useState(false);
+  const [mediaType, setMediaType] = useState('');
+
+  // Folder State
+  interface FolderSummary { filePath: string; agentId: string; fileCount: number; totalSize: number; }
+  const [folders, setFolders] = useState<FolderSummary[]>([]);
+  const [selectedFolder, setSelectedFolder] = useState<FolderSummary | null>(null);
+  const [folderFiles, setFolderFiles] = useState<Capture[]>([]);
+  const [folderAgent, setFolderAgent] = useState('');
+  const [moveTarget, setMoveTarget] = useState('');
+  const [showMoveDialog, setShowMoveDialog] = useState(false);
+  const [selectedFileIds, setSelectedFileIds] = useState<Set<number>>(new Set());
 
   // Detail State
   const [selectedCapture, setSelectedCapture] = useState<Capture | null>(null);
@@ -230,7 +241,7 @@ function App() {
     setCaptures([]);
     setPage(1);
     setHasMore(true);
-  }, [selectedMaker, selectedModel, selectedFileType, selectedAgent, dateFrom, dateTo, hasGps]);
+  }, [selectedMaker, selectedModel, selectedFileType, selectedAgent, dateFrom, dateTo, hasGps, mediaType]);
 
   // Fetch data
   useEffect(() => {
@@ -244,6 +255,7 @@ function App() {
     if (dateFrom) params.set('dateFrom', dateFrom);
     if (dateTo) params.set('dateTo', dateTo);
     if (hasGps) params.set('hasGps', 'true');
+    if (mediaType) params.set('mediaType', mediaType);
 
     const ver = filterVersion.current;
     fetch(`/api/experiment/gallery?${params}`)
@@ -262,7 +274,7 @@ function App() {
         setLoading(false);
       })
       .catch(err => { console.error('Error fetching:', err); setLoading(false); });
-  }, [page, selectedMaker, selectedModel, selectedFileType, selectedAgent, dateFrom, dateTo, hasGps]);
+  }, [page, selectedMaker, selectedModel, selectedFileType, selectedAgent, dateFrom, dateTo, hasGps, mediaType]);
 
   useEffect(() => {
     if (activeTab === 1) {
@@ -298,8 +310,22 @@ function App() {
 
   const clearFilters = () => {
     setSelectedMaker(''); setSelectedModel(''); setSelectedFileType('');
-    setSelectedAgent(''); setDateFrom(''); setDateTo(''); setHasGps(false);
+    setSelectedAgent(''); setDateFrom(''); setDateTo(''); setHasGps(false); setMediaType('');
   };
+
+  // Folder functions
+  const fetchFolders = () => {
+    const params = folderAgent ? `?agentId=${encodeURIComponent(folderAgent)}` : '';
+    fetch(`/api/experiment/folders${params}`).then(r => r.json()).then(setFolders).catch(console.error);
+  };
+  const fetchFolderFiles = (folder: FolderSummary) => {
+    setSelectedFolder(folder);
+    setSelectedFileIds(new Set());
+    const params = new URLSearchParams({ path: folder.filePath });
+    if (folder.agentId) params.set('agentId', folder.agentId);
+    fetch(`/api/experiment/folder-files?${params}`).then(r => r.json()).then(setFolderFiles).catch(console.error);
+  };
+  useEffect(() => { if (activeTab === 2) fetchFolders(); }, [activeTab, folderAgent]);
 
   const toOpts = (arr: string[], allLabel = 'All') =>
     [{ label: allLabel, value: '' }, ...arr.map(v => ({ label: v, value: v }))];
@@ -317,6 +343,7 @@ function App() {
             <Tabs value={activeTab} onChange={(v) => setActiveTab(v)}>
               <Tab value={0}>Gallery</Tab>
               <Tab value={1}>Node Config (Agents)</Tab>
+              <Tab value={2}>Folders</Tab>
             </Tabs>
 
             <TabBody style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', padding: '10px', minHeight: 0, overflow: 'hidden' }}>
@@ -355,6 +382,11 @@ function App() {
                         <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={dateInputStyle} />
                       </div>
                       <Checkbox label="GPS" checked={hasGps} onChange={() => setHasGps(!hasGps)} />
+                      <span style={{ borderLeft: '1px solid #808080', height: '20px', margin: '0 2px' }} />
+                      <Button size="sm" active={mediaType === ''} onClick={() => setMediaType('')}>All</Button>
+                      <Button size="sm" active={mediaType === 'photo'} onClick={() => setMediaType('photo')}>Photos</Button>
+                      <Button size="sm" active={mediaType === 'video'} onClick={() => setMediaType('video')}>Videos</Button>
+                      <span style={{ borderLeft: '1px solid #808080', height: '20px', margin: '0 2px' }} />
                       <Button size="sm" onClick={clearFilters}>Clear</Button>
                     </div>
                   </GroupBox>
@@ -447,12 +479,99 @@ function App() {
                               {agentHealth[agent.id] === 'healthy' ? 'OK' : agentHealth[agent.id] === 'unhealthy' ? 'DOWN' : '...'}
                             </TableDataCell>
                             <TableDataCell>{agent.lastSeen ? new Date(agent.lastSeen).toLocaleString() : '-'}</TableDataCell>
-                            <TableDataCell><Button onClick={() => handleDeleteAgent(agent.id)}>Delete</Button></TableDataCell>
+                            <TableDataCell style={{ display: 'flex', gap: '4px' }}>
+                              <Button size="sm" onClick={() => {
+                                if (window.confirm(`Clear all records for "${agent.name}" and trigger rescan?`))
+                                  fetch(`/api/experiment/agent/${agent.id}`, { method: 'DELETE' }).then(() => alert('Rescan triggered'));
+                              }}>Rescan</Button>
+                              <Button size="sm" onClick={() => handleDeleteAgent(agent.id)}>Delete</Button>
+                            </TableDataCell>
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
                   </ScrollView>
+                </div>
+              )}
+
+              {activeTab === 2 && (
+                <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px', flexShrink: 0 }}>
+                    <label style={{ fontSize: '11px' }}>Source:</label>
+                    <Select options={toOpts(filterOptions.agentIds)} value={folderAgent}
+                      onChange={(e) => setFolderAgent(e.value as string)} width={150} menuMaxHeight={200} />
+                    <Button size="sm" onClick={fetchFolders}>Refresh</Button>
+                    {selectedFolder && <>
+                      <Button size="sm" onClick={() => setShowMoveDialog(true)}
+                        disabled={selectedFileIds.size === 0}>Move ({selectedFileIds.size})</Button>
+                      <Button size="sm" style={{ color: 'red' }} onClick={() => {
+                        if (window.confirm(`Delete all ${selectedFolder.fileCount} files in "${selectedFolder.filePath}"?`))
+                          fetch(`/api/experiment/folder?path=${encodeURIComponent(selectedFolder.filePath)}&agentId=${selectedFolder.agentId || ''}`, { method: 'DELETE' })
+                            .then(() => { fetchFolders(); setSelectedFolder(null); setFolderFiles([]); });
+                      }}>Delete Folder</Button>
+                    </>}
+                  </div>
+                  <div style={{ display: 'flex', flexGrow: 1, minHeight: 0, gap: '8px' }}>
+                    {/* Folder list */}
+                    <div style={{ flex: '0 0 350px', overflow: 'auto', border: '2px inset #dfdfdf', backgroundColor: '#fff', fontSize: '11px' }}>
+                      {folders.map(f => (
+                        <div key={f.filePath + f.agentId} onClick={() => fetchFolderFiles(f)}
+                          style={{ padding: '4px 6px', cursor: 'pointer', borderBottom: '1px solid #dfdfdf',
+                            backgroundColor: selectedFolder?.filePath === f.filePath && selectedFolder?.agentId === f.agentId ? '#000080' : 'transparent',
+                            color: selectedFolder?.filePath === f.filePath && selectedFolder?.agentId === f.agentId ? '#fff' : '#000' }}>
+                          <div style={{ fontWeight: 'bold', wordBreak: 'break-all' }}>{f.filePath}</div>
+                          <div style={{ color: selectedFolder?.filePath === f.filePath ? '#ccc' : '#666' }}>
+                            {f.fileCount} files, {formatFileSize(f.totalSize)}
+                          </div>
+                        </div>
+                      ))}
+                      {folders.length === 0 && <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>No folders found</div>}
+                    </div>
+                    {/* File list */}
+                    <div style={{ flexGrow: 1, overflow: 'auto', border: '2px inset #dfdfdf', backgroundColor: '#fff' }}>
+                      {selectedFolder ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '8px', padding: '8px' }}>
+                          {folderFiles.map(pic => {
+                            const abs = pic.fileFullPath || `${pic.filePath}\\${pic.fileName}`;
+                            const src = `/api/image?path=${encodeURIComponent(abs)}&agentId=${pic.agentId || 'local'}`;
+                            const sel = selectedFileIds.has(pic.id);
+                            return (
+                              <div key={pic.id} style={{ border: sel ? '2px solid #000080' : '2px solid #dfdfdf', borderBottomColor: sel ? '#000080' : '#808080',
+                                borderRightColor: sel ? '#000080' : '#808080', padding: '3px', textAlign: 'center', backgroundColor: sel ? '#c0c0ff' : '#c0c0c0', cursor: 'pointer' }}
+                                onClick={() => setSelectedFileIds(prev => { const n = new Set(prev); n.has(pic.id) ? n.delete(pic.id) : n.add(pic.id); return n; })}>
+                                <MediaThumbnail src={src} alt={pic.fileName} style={{ width: '100%', height: '120px', objectFit: 'cover', border: '2px inset #dfdfdf', backgroundColor: '#000' }} />
+                                <div style={{ fontSize: '10px', marginTop: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pic.fileName}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>Select a folder</div>}
+                    </div>
+                  </div>
+                  {/* Move dialog */}
+                  {showMoveDialog && (
+                    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                      <Window style={{ width: '400px' }}>
+                        <WindowHeader style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span>Move Files</span>
+                          <Button size="sm" onClick={() => setShowMoveDialog(false)}>X</Button>
+                        </WindowHeader>
+                        <WindowContent>
+                          <p style={{ fontSize: '12px', marginBottom: '8px' }}>Move {selectedFileIds.size} files to:</p>
+                          <TextInput value={moveTarget} onChange={e => setMoveTarget(e.target.value)} placeholder="D:\Photos\Archive" style={{ width: '100%', marginBottom: '8px' }} />
+                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                            <Button onClick={() => setShowMoveDialog(false)}>Cancel</Button>
+                            <Button onClick={() => {
+                              fetch('/api/experiment/move', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ fileIds: Array.from(selectedFileIds), targetPath: moveTarget }) })
+                                .then(r => r.json()).then(d => { alert(`Moved ${d.moved}/${d.total} files`); setShowMoveDialog(false); if (selectedFolder) fetchFolderFiles(selectedFolder); fetchFolders(); })
+                                .catch(err => alert('Move failed: ' + err.message));
+                            }} disabled={!moveTarget}>Move</Button>
+                          </div>
+                        </WindowContent>
+                      </Window>
+                    </div>
+                  )}
                 </div>
               )}
 

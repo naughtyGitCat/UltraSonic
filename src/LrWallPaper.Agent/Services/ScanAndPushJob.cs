@@ -126,8 +126,9 @@ public class ScanAndPushJob : BackgroundService
                 _logger.LogInformation("Scan complete for {Path}", scanPath);
             }
 
-            _logger.LogInformation("Next scan in {Min} minutes.", intervalMinutes);
-            await Task.Delay(TimeSpan.FromMinutes(intervalMinutes), stoppingToken);
+            _logger.LogInformation("Next scan in {Min} minutes (or on manual trigger).", intervalMinutes);
+            // Wait for scheduled interval or manual rescan trigger
+            _agentState.WaitForRescan(TimeSpan.FromMinutes(intervalMinutes));
         }
     }
 

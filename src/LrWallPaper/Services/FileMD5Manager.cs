@@ -267,17 +267,21 @@ namespace LrWallPaper.Services
             var makers = await db.FetchAsync<string>("SELECT DISTINCT camera_maker FROM file_info WHERE camera_maker != '' ORDER BY camera_maker");
             var models = await db.FetchAsync<string>("SELECT DISTINCT camera_model FROM file_info WHERE camera_model != '' ORDER BY camera_model");
             var agents = await db.FetchAsync<string>("SELECT DISTINCT agent_id FROM file_info ORDER BY agent_id");
+            // Use REPLACE to strip everything before the last dot: e.g. "IMG(2).HEIC" -> ".heic"
             var types = await db.FetchAsync<string>(
-                "SELECT DISTINCT LOWER(SUBSTR(filename, INSTR(filename, '.'))) AS ext FROM file_info WHERE INSTR(filename, '.') > 0 ORDER BY ext");
+                "SELECT DISTINCT LOWER(SUBSTR(filename, LENGTH(RTRIM(filename, REPLACE(filename, '.', ''))))) AS ext FROM file_info WHERE INSTR(filename, '.') > 0 ORDER BY ext");
             return new { cameraMakers = makers, cameraModels = models, fileTypes = types, agentIds = agents };
         }
+
+        private static readonly string[] PhotoExts = [".jpg",".jpeg",".png",".heic",".bmp",".gif",".webp",".cr2",".cr3",".nef",".nrw",".arw",".sr2",".srf",".dng",".raf",".pef",".rw2",".orf"];
+        private static readonly string[] VideoExts = [".mp4",".mov",".avi",".mkv",".mts"];
 
         public async Task<List<FileMD5Entity>> GetFilteredPagedCapturesAsync(
             int page, int pageSize,
             string? cameraMaker, string? cameraModel,
             string? fileType, string? agentId,
             DateTime? dateFrom, DateTime? dateTo,
-            bool? hasGps)
+            bool? hasGps, string? mediaType = null)
         {
             using var db = OpenDb();
             var conditions = new List<string>();
@@ -291,6 +295,19 @@ namespace LrWallPaper.Services
             if (dateFrom.HasValue) { conditions.Add($"capture_time >= @{idx}"); parameters.Add(dateFrom.Value.ToString("yyyy-MM-dd 00:00:00")); idx++; }
             if (dateTo.HasValue) { conditions.Add($"capture_time <= @{idx}"); parameters.Add(dateTo.Value.ToString("yyyy-MM-dd 23:59:59")); idx++; }
             if (hasGps == true) { conditions.Add("latitude IS NOT NULL AND longitude IS NOT NULL"); }
+
+            if (mediaType == "photo")
+            {
+                var likes = PhotoExts.Select((e, i) => { parameters.Add($"%{e}"); return $"LOWER(filename) LIKE @{idx + i}"; });
+                conditions.Add($"({string.Join(" OR ", likes)})");
+                idx += PhotoExts.Length;
+            }
+            else if (mediaType == "video")
+            {
+                var likes = VideoExts.Select((e, i) => { parameters.Add($"%{e}"); return $"LOWER(filename) LIKE @{idx + i}"; });
+                conditions.Add($"({string.Join(" OR ", likes)})");
+                idx += VideoExts.Length;
+            }
 
             var where = conditions.Count > 0 ? "WHERE " + string.Join(" AND ", conditions) : "";
             parameters.Add(pageSize);
@@ -339,5 +356,50 @@ namespace LrWallPaper.Services
             using var db = OpenDb();
             return (await db.FetchAsync<FileMD5Entity>("SELECT * FROM file_info WHERE fullpath = @0", fullpath)).FirstOrDefault();
         }
+
+        public async Task<int> DeleteByAgentIdAsync(string agentId)
+        {
+            using var db = OpenDb();
+            return await db.ExecuteAsync("DELETE FROM file_info WHERE agent_id = @0", agentId);
+        }
+
+        public async Task<List<FolderSummary>> GetFoldersAsync(string? agentId)
+        {
+            using var db = OpenDb();
+            var where = !string.IsNullOrEmpty(agentId) ? "WHERE agent_id = @0" : "";
+            var sql = $"SELECT filepath, agent_id as agentId, COUNT(*) as fileCount, SUM(file_size) as totalSize FROM file_info {where} GROUP BY filepath, agent_id ORDER BY filepath";
+            return !string.IsNullOrEmpty(agentId)
+                ? await db.FetchAsync<FolderSummary>(sql, agentId)
+                : await db.FetchAsync<FolderSummary>(sql);
+        }
+
+        public async Task<List<FileMD5Entity>> GetFilesByFolderAsync(string path, string? agentId)
+        {
+            using var db = OpenDb();
+            if (!string.IsNullOrEmpty(agentId))
+                return await db.FetchAsync<FileMD5Entity>("SELECT * FROM file_info WHERE filepath = @0 AND agent_id = @1 ORDER BY filename", path, agentId);
+            return await db.FetchAsync<FileMD5Entity>("SELECT * FROM file_info WHERE filepath = @0 ORDER BY filename", path);
+        }
+
+        public async Task<List<FileMD5Entity>> GetFilesByIdsAsync(List<long> ids)
+        {
+            using var db = OpenDb();
+            var placeholders = string.Join(",", ids.Select((_, i) => $"@{i}"));
+            var sql = $"SELECT * FROM file_info WHERE id IN ({placeholders})";
+            return await db.FetchAsync<FileMD5Entity>(sql, ids.Cast<object>().ToArray());
+        }
+    }
+
+    [TableName("folder_summary")]
+    public record FolderSummary
+    {
+        [Column("filepath")]
+        public string FilePath { get; set; } = "";
+        [Column("agentId")]
+        public string? AgentId { get; set; }
+        [Column("fileCount")]
+        public int FileCount { get; set; }
+        [Column("totalSize")]
+        public long TotalSize { get; set; }
     }
 }

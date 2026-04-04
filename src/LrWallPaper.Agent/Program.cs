@@ -103,4 +103,28 @@ app.MapDelete("/api/agent/file", (string path, AgentState agentState) =>
     return Results.Ok();
 });
 
+// Trigger immediate rescan
+app.MapPost("/api/agent/rescan", (AgentState agentState) =>
+{
+    agentState.TriggerRescan();
+    return Results.Ok(new { message = "Rescan triggered" });
+});
+
+// Move file on agent's local disk
+app.MapPost("/api/agent/move", async (HttpContext ctx) =>
+{
+    var body = await ctx.Request.ReadFromJsonAsync<MoveFileRequest>();
+    if (body == null || string.IsNullOrEmpty(body.SourcePath) || string.IsNullOrEmpty(body.TargetPath))
+        return Results.BadRequest();
+    if (!System.IO.File.Exists(body.SourcePath))
+        return Results.NotFound();
+
+    var targetDir = System.IO.Path.GetDirectoryName(body.TargetPath);
+    if (!string.IsNullOrEmpty(targetDir)) System.IO.Directory.CreateDirectory(targetDir);
+    System.IO.File.Move(body.SourcePath, body.TargetPath, overwrite: false);
+    return Results.Ok();
+});
+
 app.Run();
+
+record MoveFileRequest(string SourcePath, string TargetPath);
