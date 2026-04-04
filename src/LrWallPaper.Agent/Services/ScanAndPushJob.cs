@@ -60,8 +60,11 @@ public class ScanAndPushJob : BackgroundService
                 PersistAgentId(agentId);
             }
 
-            // Auto-register with Master so it can proxy image requests back to this Agent
-            var agentUrl = _configuration["Urls"] ?? "http://localhost:5282";
+            // Auto-register with Master — resolve actual IP instead of bind address
+            var bindUrl = _configuration["Urls"] ?? "http://localhost:5282";
+            var uri = new Uri(bindUrl);
+            var actualIp = GetLocalIpAddress();
+            var agentUrl = $"{uri.Scheme}://{actualIp}:{uri.Port}";
             await RegisterWithMaster(masterEndpoint, agentId, agentUrl, stoppingToken);
 
             _logger.LogInformation("Agent {Id} starting scan. Master={Master}, Paths={Paths}, Interval={Min}m",
@@ -252,6 +255,20 @@ public class ScanAndPushJob : BackgroundService
         if (string.IsNullOrEmpty(raw)) return null;
         if (long.TryParse(raw.Split(' ').First(), out var size)) return size;
         return null;
+    }
+
+    private static string GetLocalIpAddress()
+    {
+        try
+        {
+            using var socket = new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Dgram, 0);
+            socket.Connect("8.8.8.8", 65530);
+            return ((System.Net.IPEndPoint)socket.LocalEndPoint!).Address.ToString();
+        }
+        catch
+        {
+            return "127.0.0.1";
+        }
     }
 
     private static void PersistAgentId(string agentId)

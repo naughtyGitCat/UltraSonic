@@ -511,7 +511,8 @@ function App() {
                       <TableHead>
                         <TableRow>
                           <TableHeadCell>Name</TableHeadCell>
-                          <TableHeadCell>Endpoint</TableHeadCell>
+                          <TableHeadCell>IP</TableHeadCell>
+                          <TableHeadCell>Port</TableHeadCell>
                           <TableHeadCell>Version</TableHeadCell>
                           <TableHeadCell>Health</TableHeadCell>
                           <TableHeadCell>Heartbeat</TableHeadCell>
@@ -521,7 +522,8 @@ function App() {
                       <TableBody>
                         <TableRow>
                           <TableDataCell>Master Local</TableDataCell>
-                          <TableDataCell>127.0.0.1</TableDataCell>
+                          <TableDataCell>{window.location.hostname}</TableDataCell>
+                          <TableDataCell>5281</TableDataCell>
                           <TableDataCell>{masterVersion}</TableDataCell>
                           <TableDataCell style={{ color: masterHealth === 'healthy' ? 'green' : masterHealth === 'unhealthy' ? 'red' : '#666' }}>
                             {masterHealth === 'healthy' ? 'OK' : masterHealth === 'unhealthy' ? 'DOWN' : '...'}
@@ -529,10 +531,14 @@ function App() {
                           <TableDataCell>-</TableDataCell>
                           <TableDataCell>Built-in</TableDataCell>
                         </TableRow>
-                        {agents.map(agent => (
+                        {agents.map(agent => {
+                          let agentIp = '-', agentPort = '-';
+                          try { const u = new URL(agent.endpoint); agentIp = u.hostname; agentPort = u.port; } catch {}
+                          return (
                           <TableRow key={agent.id}>
                             <TableDataCell>{agent.name}</TableDataCell>
-                            <TableDataCell>{agent.endpoint}</TableDataCell>
+                            <TableDataCell>{agentIp}</TableDataCell>
+                            <TableDataCell>{agentPort}</TableDataCell>
                             <TableDataCell>{agent.version || '-'}</TableDataCell>
                             <TableDataCell style={{ color: agentHealth[agent.id] === 'healthy' ? 'green' : agentHealth[agent.id] === 'unhealthy' ? 'red' : '#666' }}>
                               {agentHealth[agent.id] === 'healthy' ? 'OK' : agentHealth[agent.id] === 'unhealthy' ? 'DOWN' : '...'}
@@ -546,7 +552,7 @@ function App() {
                               <Button size="sm" onClick={() => handleDeleteAgent(agent.id)}>Delete</Button>
                             </TableDataCell>
                           </TableRow>
-                        ))}
+                        );})}
                       </TableBody>
                     </Table>
                   </ScrollView>
