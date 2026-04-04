@@ -60,6 +60,10 @@ public class ScanAndPushJob : BackgroundService
                                    "Set Agent:AgentId in appsettings.json for persistence.", agentId);
             }
 
+            // Auto-register with Master so it can proxy image requests back to this Agent
+            var agentUrl = _configuration["Urls"] ?? "http://localhost:5282";
+            await RegisterWithMaster(masterEndpoint, agentId, agentUrl, stoppingToken);
+
             _logger.LogInformation("Agent {Id} starting scan. Master={Master}, Paths={Paths}, Interval={Min}m",
                 agentId, masterEndpoint, string.Join(";", scanPaths), intervalMinutes);
 
@@ -93,6 +97,8 @@ public class ScanAndPushJob : BackgroundService
                             CameraModel = exif.CameraModel ?? "",
                             LensModel = exif.LensModel ?? "",
                             AgentId = agentId,
+                            Latitude = exif.Latitude,
+                            Longitude = exif.Longitude,
                             FileSize = exif.FileSize ?? new FileInfo(filePath).Length,
                             FileMD5 = md5,
                             CaptureTime = exif.PhotoDateTime ?? File.GetLastWriteTime(filePath)
@@ -140,6 +146,22 @@ public class ScanAndPushJob : BackgroundService
         }
     }
 
+    private async Task RegisterWithMaster(string masterEndpoint, string agentId, string agentUrl, CancellationToken ct)
+    {
+        var url = $"{masterEndpoint.TrimEnd('/')}/api/agent";
+        try
+        {
+            var payload = new { id = agentId, name = Environment.MachineName, endpoint = agentUrl };
+            var response = await _httpClient.PostAsJsonAsync(url, payload, ct);
+            _logger.LogInformation("Registered with Master — AgentId={Id}, Endpoint={Url}, HTTP {Status}",
+                agentId, agentUrl, (int)response.StatusCode);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to register with Master at {Url}", url);
+        }
+    }
+
     private static IEnumerable<string> EnumerateImageFiles(string root, HashSet<string> extensions)
     {
         IEnumerable<string> files;
@@ -181,6 +203,18 @@ public class ScanAndPushJob : BackgroundService
             var ifd0 = directories.FirstOrDefault(d => d.Name == "Exif IFD0");
             var subIfd = directories.FirstOrDefault(d => d.Name == "Exif SubIFD");
             var fileMeta = directories.FirstOrDefault(d => d.Name == "File");
+            var gpsDir = directories.FirstOrDefault(d => d.Name == "GPS");
+
+            double? lat = null, lon = null;
+            if (gpsDir != null)
+            {
+                var latTag = gpsDir.Tags.FirstOrDefault(t => t.Name == "GPS Latitude")?.Description;
+                var latRef = gpsDir.Tags.FirstOrDefault(t => t.Name == "GPS Latitude Ref")?.Description;
+                var lonTag = gpsDir.Tags.FirstOrDefault(t => t.Name == "GPS Longitude")?.Description;
+                var lonRef = gpsDir.Tags.FirstOrDefault(t => t.Name == "GPS Longitude Ref")?.Description;
+                lat = ParseGpsCoordinate(latTag, latRef);
+                lon = ParseGpsCoordinate(lonTag, lonRef);
+            }
 
             return new ExifResult
             {
@@ -188,7 +222,9 @@ public class ScanAndPushJob : BackgroundService
                 CameraModel = ifd0?.Tags.FirstOrDefault(t => t.Name == "Model")?.Description,
                 LensModel = subIfd?.Tags.FirstOrDefault(t => t.Name == "Lens Model")?.Description,
                 PhotoDateTime = ParseExifDate(ifd0?.Tags.FirstOrDefault(t => t.Name == "Date/Time")?.Description),
-                FileSize = ParseFileSize(fileMeta?.Tags.FirstOrDefault(t => t.Name == "File Size")?.Description)
+                FileSize = ParseFileSize(fileMeta?.Tags.FirstOrDefault(t => t.Name == "File Size")?.Description),
+                Latitude = lat,
+                Longitude = lon
             };
         }
         catch
@@ -214,6 +250,21 @@ public class ScanAndPushJob : BackgroundService
         return null;
     }
 
+    private static double? ParseGpsCoordinate(string? dms, string? reference)
+    {
+        if (string.IsNullOrEmpty(dms)) return null;
+        // Format: "23° 7' 30.12\"" or similar
+        var parts = dms.Replace("°", " ").Replace("'", " ").Replace("\"", " ")
+                       .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 3) return null;
+        if (!double.TryParse(parts[0], out var deg) ||
+            !double.TryParse(parts[1], out var min) ||
+            !double.TryParse(parts[2], out var sec)) return null;
+        var result = deg + min / 60.0 + sec / 3600.0;
+        if (reference is "S" or "W") result = -result;
+        return result;
+    }
+
     private record ExifResult
     {
         public string? CameraMaker { get; init; }
@@ -221,5 +272,7 @@ public class ScanAndPushJob : BackgroundService
         public string? LensModel { get; init; }
         public DateTime? PhotoDateTime { get; init; }
         public long? FileSize { get; init; }
+        public double? Latitude { get; init; }
+        public double? Longitude { get; init; }
     }
 }

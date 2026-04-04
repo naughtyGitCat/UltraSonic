@@ -28,6 +28,12 @@ namespace LrWallPaper.Services
         [Column("agent_id")]
         public string? AgentId { get; set; }
 
+        [Column("latitude")]
+        public double? Latitude { get; set; }
+
+        [Column("longitude")]
+        public double? Longitude { get; set; }
+
         [Column("file_size")]
         public long FileSize { get; set; }
 
@@ -86,6 +92,8 @@ namespace LrWallPaper.Services
 
             try { _database.Execute("ALTER TABLE file_info ADD COLUMN agent_id TEXT NULL;"); } catch {}
             try { _database.Execute("UPDATE file_info SET agent_id = 'local' WHERE agent_id IS NULL;"); } catch {}
+            try { _database.Execute("ALTER TABLE file_info ADD COLUMN latitude REAL NULL;"); } catch {}
+            try { _database.Execute("ALTER TABLE file_info ADD COLUMN longitude REAL NULL;"); } catch {}
         }
 
         public async Task SaveFileMD5Async(FileMD5Entity file) 
@@ -99,22 +107,24 @@ namespace LrWallPaper.Services
             _logger.LogInformation(file.ToString());
             _logger.LogInformation( sql );
             var pSQL = """
-                               INSERT OR REPLACE INTO 
-                                file_info 
-                                (fullpath,filepath,filename,camera_maker,camera_model,lens_model,agent_id,file_size,file_md5,capture_time,create_time,update_time)
-                                VALUES 
+                               INSERT OR REPLACE INTO
+                                file_info
+                                (fullpath,filepath,filename,camera_maker,camera_model,lens_model,agent_id,latitude,longitude,file_size,file_md5,capture_time,create_time,update_time)
+                                VALUES
                                 (
-                                    @fullpath, 
-                                    @filepath, 
+                                    @fullpath,
+                                    @filepath,
                                     @filename,
-                                    @camera_maker, 
-                                    @camera_model, 
+                                    @camera_maker,
+                                    @camera_model,
                                     @lens_model,
                                     @agent_id,
-                                    @file_size, 
+                                    @latitude,
+                                    @longitude,
+                                    @file_size,
                                     @file_md5,
-                                    @capture_time, 
-                                    @create_time,  
+                                    @capture_time,
+                                    @create_time,
                                     @update_time
                                 )
                 """;
@@ -136,6 +146,8 @@ namespace LrWallPaper.Services
             cmd.Parameters.Add(new SqliteParameter("@camera_model", file.CameraModel));
             cmd.Parameters.Add(new SqliteParameter("@lens_model", file.LensModel));
             cmd.Parameters.Add(new SqliteParameter("@agent_id", file.AgentId ?? "local"));
+            cmd.Parameters.Add(new SqliteParameter("@latitude", file.Latitude.HasValue ? file.Latitude.Value : DBNull.Value));
+            cmd.Parameters.Add(new SqliteParameter("@longitude", file.Longitude.HasValue ? file.Longitude.Value : DBNull.Value));
             cmd.Parameters.Add(new SqliteParameter("@file_size", file.FileSize==0?(object)0:file.FileSize));
             cmd.Parameters.Add(new SqliteParameter("@file_md5", file.FileMD5));
             cmd.Parameters.Add(new SqliteParameter("@capture_time", $"{file.CaptureTime:yyyy-MM-dd HH:mm:ss}"));
@@ -237,6 +249,48 @@ namespace LrWallPaper.Services
             var since = DateTime.Now - offset;
             var sql = "SELECT * FROM file_info WHERE capture_time >= @0 ORDER BY capture_time DESC";
             return await _database.FetchAsync<FileMD5Entity>(sql, since.ToString("yyyy-MM-dd HH:mm:ss"));
+        }
+
+        public async Task<object> GetFilterOptionsAsync()
+        {
+            var makers = await _database.FetchAsync<string>("SELECT DISTINCT camera_maker FROM file_info WHERE camera_maker != '' ORDER BY camera_maker");
+            var models = await _database.FetchAsync<string>("SELECT DISTINCT camera_model FROM file_info WHERE camera_model != '' ORDER BY camera_model");
+            var agents = await _database.FetchAsync<string>("SELECT DISTINCT agent_id FROM file_info ORDER BY agent_id");
+            var types = await _database.FetchAsync<string>(
+                "SELECT DISTINCT LOWER(SUBSTR(filename, INSTR(filename, '.'))) AS ext FROM file_info WHERE INSTR(filename, '.') > 0 ORDER BY ext");
+            return new { cameraMakers = makers, cameraModels = models, fileTypes = types, agentIds = agents };
+        }
+
+        public async Task<List<FileMD5Entity>> GetFilteredPagedCapturesAsync(
+            int page, int pageSize,
+            string? cameraMaker, string? cameraModel,
+            string? fileType, string? agentId,
+            DateTime? dateFrom, DateTime? dateTo,
+            bool? hasGps)
+        {
+            var conditions = new List<string>();
+            var parameters = new List<object>();
+            var idx = 0;
+
+            if (!string.IsNullOrEmpty(cameraMaker)) { conditions.Add($"camera_maker = @{idx}"); parameters.Add(cameraMaker); idx++; }
+            if (!string.IsNullOrEmpty(cameraModel)) { conditions.Add($"camera_model = @{idx}"); parameters.Add(cameraModel); idx++; }
+            if (!string.IsNullOrEmpty(fileType)) { conditions.Add($"LOWER(filename) LIKE @{idx}"); parameters.Add($"%{fileType.ToLower()}"); idx++; }
+            if (!string.IsNullOrEmpty(agentId)) { conditions.Add($"agent_id = @{idx}"); parameters.Add(agentId); idx++; }
+            if (dateFrom.HasValue) { conditions.Add($"capture_time >= @{idx}"); parameters.Add(dateFrom.Value.ToString("yyyy-MM-dd 00:00:00")); idx++; }
+            if (dateTo.HasValue) { conditions.Add($"capture_time <= @{idx}"); parameters.Add(dateTo.Value.ToString("yyyy-MM-dd 23:59:59")); idx++; }
+            if (hasGps == true) { conditions.Add("latitude IS NOT NULL AND longitude IS NOT NULL"); }
+
+            var where = conditions.Count > 0 ? "WHERE " + string.Join(" AND ", conditions) : "";
+            parameters.Add(pageSize);
+            parameters.Add((page - 1) * pageSize);
+
+            var sql = $"SELECT * FROM file_info {where} ORDER BY capture_time DESC LIMIT @{idx} OFFSET @{idx + 1}";
+            return await _database.FetchAsync<FileMD5Entity>(sql, parameters.ToArray());
+        }
+
+        public async Task<FileMD5Entity?> GetCaptureByIdAsync(long id)
+        {
+            return (await _database.FetchAsync<FileMD5Entity>("SELECT * FROM file_info WHERE id = @0", id)).FirstOrDefault();
         }
     }
 }

@@ -3,6 +3,7 @@ using ModelContextProtocol.Server;
 using Serilog;
 using Serilog.Events;
 using Microsoft.AspNetCore.Hosting;
+using ImageMagick;
 
 using LrWallPaper.Jobs;
 using LrWallPaper.Models;
@@ -99,6 +100,14 @@ class Program
             if (string.IsNullOrEmpty(agentId) || agentId == "local")
             {
                 if (!System.IO.File.Exists(path)) return Results.NotFound();
+                if (ext == ".heic")
+                {
+                    using var image = new MagickImage(path);
+                    var ms = new MemoryStream();
+                    image.Write(ms, MagickFormat.Jpeg);
+                    ms.Position = 0;
+                    return Results.File(ms, "image/jpeg");
+                }
                 return Results.File(path, contentType, enableRangeProcessing: true);
             }
 
@@ -113,7 +122,8 @@ class Program
                 var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
                 response.EnsureSuccessStatusCode();
                 var stream = await response.Content.ReadAsStreamAsync();
-                return Results.File(stream, contentType, enableRangeProcessing: true);
+                var proxyContentType = ext == ".heic" ? "image/jpeg" : contentType;
+                return Results.File(stream, proxyContentType, enableRangeProcessing: true);
             } catch {
                 return Results.StatusCode(502);
             }

@@ -1,5 +1,6 @@
 using Serilog;
 using Serilog.Events;
+using ImageMagick;
 using LrWallPaper.Agent.Services;
 
 var logTemplate = "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz}[{Level:u3}][{SourceContext}]{Message:lj}{NewLine}{Exception}";
@@ -67,6 +68,14 @@ app.MapGet("/api/agent/image", (string path, AgentState agentState) =>
         _ => "application/octet-stream"
     };
 
+    if (ext == ".heic")
+    {
+        using var image = new MagickImage(path);
+        var ms = new MemoryStream();
+        image.Write(ms, MagickFormat.Jpeg);
+        ms.Position = 0;
+        return Results.File(ms, "image/jpeg");
+    }
     return Results.File(path, contentType, enableRangeProcessing: true);
 });
 

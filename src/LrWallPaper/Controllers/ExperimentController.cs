@@ -27,4 +27,30 @@ public class ExperimentController : ControllerBase
     {
         return await _md5Manager.GetPagedCapturesAsync(page, pageSize);
     }
+
+    [HttpGet("filters")]
+    public async Task<object> GetFilters()
+    {
+        return await _md5Manager.GetFilterOptionsAsync();
+    }
+
+    [HttpGet("gallery")]
+    public async Task<object> GetGallery(
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 30,
+        [FromQuery] string? cameraMaker = null, [FromQuery] string? cameraModel = null,
+        [FromQuery] string? fileType = null, [FromQuery] string? agentId = null,
+        [FromQuery] DateTime? dateFrom = null, [FromQuery] DateTime? dateTo = null,
+        [FromQuery] bool? hasGps = null)
+    {
+        return await _md5Manager.GetFilteredPagedCapturesAsync(
+            page, pageSize, cameraMaker, cameraModel, fileType, agentId, dateFrom, dateTo, hasGps);
+    }
+
+    [HttpGet("detail/{id:long}")]
+    public async Task<IActionResult> GetDetail(long id)
+    {
+        var capture = await _md5Manager.GetCaptureByIdAsync(id);
+        if (capture == null) return NotFound();
+        return Ok(capture);
+    }
 }
