@@ -31,9 +31,4 @@
         public const string Apple = "DCIM/100Apple";
     }
 
-    public static class ArchivePaths
-    {
-        public const string Current = "D:/摄影";
-        public const string History = "X:/摄影";
-    }
 }

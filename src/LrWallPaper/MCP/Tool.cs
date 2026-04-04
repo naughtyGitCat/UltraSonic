@@ -1,4 +1,3 @@
-// 20251121 naughtyGitCat
 // Added MCP server setup to LrWallPaper Program.cs
 
 using ModelContextProtocol.Server;

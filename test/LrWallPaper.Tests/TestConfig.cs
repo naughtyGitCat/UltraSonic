@@ -12,13 +12,13 @@ public class TestConfig
     {
         var myConfiguration = new Dictionary<string, string>
         {
-            {"UltraSonic:LocalScan:RootDirectories:0", "D:\\"},
-            {"UltraSonic:LocalScan:SkipDirectories:0", "D:\\Skip"},
-            {"UltraSonic:AppleImport:TempDirectory", "F:\\"},
-            {"UltraSonic:AppleImport:ArchiveDirectory", "D:\\Photograph"},
-            {"UltraSonic:Lightroom:CatalogPath", "D:\\Lightroom.lrcat"},
-            {"UltraSonic:ArchivePaths:Current", "D:/Current"},
-            {"UltraSonic:ArchivePaths:History", "X:/History"}
+            {"UltraSonic:LocalScan:RootDirectories:0", "C:\\Photos"},
+            {"UltraSonic:LocalScan:SkipDirectories:0", "C:\\Photos\\Skip"},
+            {"UltraSonic:AppleImport:TempDirectory", "C:\\Temp"},
+            {"UltraSonic:AppleImport:ArchiveDirectory", "C:\\Photos\\Archive"},
+            {"UltraSonic:Lightroom:CatalogPath", "C:\\Lightroom\\Catalog.lrcat"},
+            {"UltraSonic:ArchivePaths:Current", "C:/Photos/Current"},
+            {"UltraSonic:ArchivePaths:History", "C:/Photos/History"}
         };
 
         var configuration = new ConfigurationBuilder()
@@ -29,8 +29,8 @@ public class TestConfig
 
         Assert.NotNull(config);
         Assert.Single(config.LocalScan.RootDirectories);
-        Assert.Equal("D:\\", config.LocalScan.RootDirectories[0]);
-        Assert.Equal("F:\\", config.AppleImport.TempDirectory);
-        Assert.Equal("D:\\Lightroom.lrcat", config.Lightroom.CatalogPath);
+        Assert.Equal("C:\\Photos", config.LocalScan.RootDirectories[0]);
+        Assert.Equal("C:\\Temp", config.AppleImport.TempDirectory);
+        Assert.Equal("C:\\Lightroom\\Catalog.lrcat", config.Lightroom.CatalogPath);
     }
 }

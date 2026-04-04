@@ -1,4 +1,3 @@
-// psyduck 20220409
 using System;
 using LrWallPaper.Helpers;
 

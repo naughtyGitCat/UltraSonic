@@ -1,4 +1,3 @@
-// psyduck 20220409
 using LrWallPaper.Services;
 using ModelContextProtocol.Server;
 using Serilog;

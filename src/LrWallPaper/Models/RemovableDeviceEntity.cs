@@ -1,5 +1,4 @@
-﻿// psyduck 20220814
-
+﻿
 namespace LrWallPaper.Models
 {
     public record RemovableDeviceDO
