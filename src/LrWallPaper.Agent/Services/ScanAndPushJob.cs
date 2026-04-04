@@ -37,6 +37,8 @@ public class ScanAndPushJob : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            try
+            {
             if (!_agentState.IsScanningEnabled)
             {
                 await Task.Delay(TimeSpan.FromSeconds(15), stoppingToken);
@@ -82,12 +84,14 @@ public class ScanAndPushJob : BackgroundService
 
                 var batch = new List<object>();
 
+                var fileCount = 0;
                 foreach (var filePath in EnumerateImageFiles(scanPath, extensions))
                 {
                     if (stoppingToken.IsCancellationRequested) break;
 
                     try
                     {
+                        _logger.LogDebug("Processing: {File}", filePath);
                         var md5 = ComputeMD5(filePath);
                         var exif = ReadExif(filePath);
 
@@ -106,6 +110,7 @@ public class ScanAndPushJob : BackgroundService
                             FileMD5 = md5,
                             CaptureTime = exif.PhotoDateTime ?? File.GetLastWriteTime(filePath)
                         });
+                        fileCount++;
 
                         // Flush in chunks of 100
                         if (batch.Count >= 100)
@@ -116,7 +121,7 @@ public class ScanAndPushJob : BackgroundService
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Failed to process: {File}", filePath);
+                        _logger.LogWarning(ex, "Failed to process file: {File}", filePath);
                     }
                 }
 
@@ -126,12 +131,19 @@ public class ScanAndPushJob : BackgroundService
                     await PushBatch(masterEndpoint, batch, stoppingToken);
                 }
 
-                _logger.LogInformation("Scan complete for {Path}", scanPath);
+                _logger.LogInformation("Scan complete for {Path}, processed {Count} files", scanPath, fileCount);
             }
 
             _logger.LogInformation("Next scan in {Min} minutes (or on manual trigger).", intervalMinutes);
+
             // Wait for scheduled interval or manual rescan trigger
             _agentState.WaitForRescan(TimeSpan.FromMinutes(intervalMinutes));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "ScanAndPushJob encountered an unhandled error, will retry in 60s");
+                _agentState.WaitForRescan(TimeSpan.FromSeconds(60));
+            }
         }
     }
 
