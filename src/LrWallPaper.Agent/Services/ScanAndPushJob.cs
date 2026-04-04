@@ -53,11 +53,11 @@ public class ScanAndPushJob : BackgroundService
                 ? new HashSet<string>(supportedExts, StringComparer.OrdinalIgnoreCase)
                 : DefaultExtensions;
 
-            if (string.IsNullOrEmpty(agentId))
+            if (string.IsNullOrEmpty(agentId) || agentId == "auto")
             {
                 agentId = Guid.NewGuid().ToString();
-                _logger.LogWarning("No AgentId configured — generated ephemeral ID: {Id}. " +
-                                   "Set Agent:AgentId in appsettings.json for persistence.", agentId);
+                _logger.LogInformation("Generated AgentId: {Id}, persisting to appsettings.json", agentId);
+                PersistAgentId(agentId);
             }
 
             // Auto-register with Master so it can proxy image requests back to this Agent
@@ -251,6 +251,21 @@ public class ScanAndPushJob : BackgroundService
         if (string.IsNullOrEmpty(raw)) return null;
         if (long.TryParse(raw.Split(' ').First(), out var size)) return size;
         return null;
+    }
+
+    private static void PersistAgentId(string agentId)
+    {
+        try
+        {
+            var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+            var json = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.Nodes.JsonObject>(File.ReadAllText(path));
+            if (json?["Agent"] is System.Text.Json.Nodes.JsonObject agent)
+            {
+                agent["AgentId"] = agentId;
+                File.WriteAllText(path, json.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+            }
+        }
+        catch { }
     }
 
     private static double? ParseGpsCoordinate(string? dms, string? reference)
