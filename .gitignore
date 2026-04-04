@@ -1,9 +1,26 @@
+# Build output
 obj/
 bin/
+publish/
+
+# Logs
 logs/
+*.log
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE / Editor
 .vs/
-.claudiaideconfig
 .vscode/
 .idea/
-.db
-src/LrWallPaper/ultrasonic.db
+*.csproj.user
+
+# Claude
+.claude/
+.claudiaideconfig
+
+# Release artifacts
+release_download_*/
