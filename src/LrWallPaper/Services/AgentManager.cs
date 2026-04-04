@@ -14,6 +14,9 @@ public record AgentEntity
 
     [Column("endpoint")]
     public string Endpoint { get; set; } = string.Empty;
+
+    [Column("version")]
+    public string Version { get; set; } = string.Empty;
 }
 
 public class AgentManager
@@ -39,11 +42,12 @@ public class AgentManager
     public async Task SaveAgentAsync(AgentEntity agent)
     {
         using var db = OpenDb();
+        try { db.Execute("ALTER TABLE agent_info ADD COLUMN version TEXT NOT NULL DEFAULT '';"); } catch {}
         var sql = $"""
-            INSERT OR REPLACE INTO agent_info (id, name, endpoint)
-            VALUES (@0, @1, @2)
+            INSERT OR REPLACE INTO agent_info (id, name, endpoint, version)
+            VALUES (@0, @1, @2, @3)
             """;
-        await db.ExecuteAsync(sql, agent.Id, agent.Name, agent.Endpoint);
+        await db.ExecuteAsync(sql, agent.Id, agent.Name, agent.Endpoint, agent.Version);
     }
 
     public async Task DeleteAgentAsync(string id)

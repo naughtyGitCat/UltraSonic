@@ -9,7 +9,14 @@
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
     <DockerfileContext>..\..</DockerfileContext>
     <ApplicationIcon>master.ico</ApplicationIcon>
+    <SourceRevisionId>$(SourceRevisionId)</SourceRevisionId>
   </PropertyGroup>
+
+  <Target Name="SetGitHash" BeforeTargets="GetAssemblyVersion" Condition="'$(SourceRevisionId)' == ''">
+    <Exec Command="git rev-parse --short HEAD" ConsoleToMSBuild="true" IgnoreExitCode="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="SourceRevisionId" />
+    </Exec>
+  </Target>
 
   <ItemGroup>
     <EmbeddedResource Include="master.ico" />

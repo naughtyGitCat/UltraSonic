@@ -151,7 +151,10 @@ public class ScanAndPushJob : BackgroundService
         var url = $"{masterEndpoint.TrimEnd('/')}/api/agent";
         try
         {
-            var payload = new { id = agentId, name = Environment.MachineName, endpoint = agentUrl };
+            var asm = System.Reflection.Assembly.GetExecutingAssembly();
+            var ver = asm.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+                .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion ?? "unknown";
+            var payload = new { id = agentId, name = Environment.MachineName, endpoint = agentUrl, version = ver };
             var response = await _httpClient.PostAsJsonAsync(url, payload, ct);
             _logger.LogInformation("Registered with Master — AgentId={Id}, Endpoint={Url}, HTTP {Status}",
                 agentId, agentUrl, (int)response.StatusCode);

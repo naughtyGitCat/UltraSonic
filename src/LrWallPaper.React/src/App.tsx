@@ -61,6 +61,7 @@ interface Agent {
   id: string;
   name: string;
   endpoint: string;
+  version?: string;
 }
 
 function formatFileSize(bytes?: number): string {
@@ -191,6 +192,7 @@ function App() {
 
   // Agent State
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [masterVersion, setMasterVersion] = useState('');
   const [newAgentName, setNewAgentName] = useState('');
   const [newAgentIp, setNewAgentIp] = useState('');
 
@@ -259,7 +261,12 @@ function App() {
       .catch(err => { console.error('Error fetching:', err); setLoading(false); });
   }, [page, selectedMaker, selectedModel, selectedFileType, selectedAgent, dateFrom, dateTo, hasGps]);
 
-  useEffect(() => { if (activeTab === 1) fetchAgents(); }, [activeTab]);
+  useEffect(() => {
+    if (activeTab === 1) {
+      fetchAgents();
+      fetch('/api/version').then(r => r.json()).then(d => setMasterVersion(d.version || '')).catch(() => {});
+    }
+  }, [activeTab]);
 
   const fetchAgents = () => {
     fetch('/api/agent').then(r => r.json()).then(setAgents).catch(console.error);
@@ -397,6 +404,7 @@ function App() {
                           <TableHeadCell>Name</TableHeadCell>
                           <TableHeadCell>UUID</TableHeadCell>
                           <TableHeadCell>API Endpoint</TableHeadCell>
+                          <TableHeadCell>Version</TableHeadCell>
                           <TableHeadCell>Actions</TableHeadCell>
                         </TableRow>
                       </TableHead>
@@ -405,6 +413,7 @@ function App() {
                           <TableDataCell>Master Local</TableDataCell>
                           <TableDataCell>local</TableDataCell>
                           <TableDataCell>127.0.0.1</TableDataCell>
+                          <TableDataCell>{masterVersion}</TableDataCell>
                           <TableDataCell>Built-in</TableDataCell>
                         </TableRow>
                         {agents.map(agent => (
@@ -412,6 +421,7 @@ function App() {
                             <TableDataCell>{agent.name}</TableDataCell>
                             <TableDataCell>{agent.id}</TableDataCell>
                             <TableDataCell>{agent.endpoint}</TableDataCell>
+                            <TableDataCell>{agent.version || '-'}</TableDataCell>
                             <TableDataCell><Button onClick={() => handleDeleteAgent(agent.id)}>Delete</Button></TableDataCell>
                           </TableRow>
                         ))}

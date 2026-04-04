@@ -79,6 +79,14 @@ app.MapGet("/api/agent/image", (string path, AgentState agentState) =>
     return Results.File(path, contentType, enableRangeProcessing: true);
 });
 
+app.MapGet("/api/agent/version", () =>
+{
+    var asm = System.Reflection.Assembly.GetExecutingAssembly();
+    var infoVer = asm.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+        .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion ?? "unknown";
+    return Results.Ok(new { version = infoVer });
+});
+
 // File delete endpoint for Master to request file deletion
 app.MapDelete("/api/agent/file", (string path, AgentState agentState) =>
 {

@@ -75,6 +75,14 @@ class Program
 
         app.MapControllers();
 
+        app.MapGet("/api/version", () =>
+        {
+            var asm = System.Reflection.Assembly.GetExecutingAssembly();
+            var infoVer = asm.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+                .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion ?? "unknown";
+            return Results.Ok(new { version = infoVer });
+        });
+
         // SPA fallback: any unmatched route returns index.html
         app.MapFallbackToFile("index.html");
 
