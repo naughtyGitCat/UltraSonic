@@ -46,4 +46,23 @@ public class MasterSyncController : ControllerBase
         
         return Ok(new { Count = captures.Count });
     }
+
+    [HttpGet("config")]
+    public IActionResult GetConfig()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+        if (!System.IO.File.Exists(path)) return NotFound();
+        var json = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.Nodes.JsonObject>(System.IO.File.ReadAllText(path));
+        return Ok(json);
+    }
+
+    [HttpPut("config")]
+    public async Task<IActionResult> PutConfig()
+    {
+        var body = await Request.ReadFromJsonAsync<System.Text.Json.Nodes.JsonObject>();
+        if (body == null) return BadRequest();
+        var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+        System.IO.File.WriteAllText(path, body.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        return Ok(new { message = "Master config saved" });
+    }
 }

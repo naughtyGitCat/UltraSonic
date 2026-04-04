@@ -126,6 +126,24 @@ app.MapPost("/api/agent/move", async (HttpContext ctx) =>
     return Results.Ok();
 });
 
+// Config read/write endpoints
+app.MapGet("/api/agent/config", () =>
+{
+    var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+    if (!System.IO.File.Exists(path)) return Results.NotFound();
+    var json = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.Nodes.JsonObject>(System.IO.File.ReadAllText(path));
+    return Results.Ok(json);
+});
+
+app.MapPut("/api/agent/config", async (HttpContext ctx) =>
+{
+    var body = await ctx.Request.ReadFromJsonAsync<System.Text.Json.Nodes.JsonObject>();
+    if (body == null) return Results.BadRequest();
+    var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+    System.IO.File.WriteAllText(path, body.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+    return Results.Ok(new { message = "Config saved" });
+});
+
 app.Run();
 
 record MoveFileRequest(string SourcePath, string TargetPath);

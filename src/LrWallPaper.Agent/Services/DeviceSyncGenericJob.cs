@@ -28,6 +28,7 @@ public class DeviceSyncGenericJob : BackgroundService
             var masterEndpoint = _configuration["Agent:MasterEndpoint"] ?? "http://localhost:5281";
             var agentId = _configuration["Agent:AgentId"] ?? "local";
             var archiveDir = _configuration["DeviceSync:GenericImport:ArchiveDirectory"] ?? "";
+            var transferMode = _configuration["DeviceSync:GenericImport:TransferMode"]?.ToLower() ?? "copy";
 
             if (string.IsNullOrEmpty(archiveDir))
             {
@@ -39,7 +40,7 @@ public class DeviceSyncGenericJob : BackgroundService
             try
             {
                 _logger.LogInformation("Starting generic device scan...");
-                await ImportFromRemovableDrivesAsync(masterEndpoint, agentId, archiveDir, stoppingToken);
+                await ImportFromRemovableDrivesAsync(masterEndpoint, agentId, archiveDir, transferMode, stoppingToken);
                 _logger.LogInformation("Generic device scan completed.");
             }
             catch (Exception ex)
@@ -52,7 +53,7 @@ public class DeviceSyncGenericJob : BackgroundService
     }
 
     private async Task ImportFromRemovableDrivesAsync(string masterEndpoint, string agentId,
-        string archiveDir, CancellationToken ct)
+        string archiveDir, string transferMode, CancellationToken ct)
     {
         var drives = DriveInfo.GetDrives()
             .Where(d => d.IsReady && d.DriveType == DriveType.Removable)
@@ -67,7 +68,7 @@ public class DeviceSyncGenericJob : BackgroundService
 
             _logger.LogInformation("Found removable device with DCIM at: {Path}", dcimPath);
             var batch = new List<object>();
-            await ProcessDirectoryAsync(dcimPath, masterEndpoint, agentId, archiveDir, batch, ct);
+            await ProcessDirectoryAsync(dcimPath, masterEndpoint, agentId, archiveDir, transferMode, batch, ct);
 
             if (batch.Count > 0)
                 await PushBatchAsync(masterEndpoint, batch, ct);
@@ -75,7 +76,7 @@ public class DeviceSyncGenericJob : BackgroundService
     }
 
     private async Task ProcessDirectoryAsync(string dir, string masterEndpoint, string agentId,
-        string archiveDir, List<object> batch, CancellationToken ct)
+        string archiveDir, string transferMode, List<object> batch, CancellationToken ct)
     {
         if (ct.IsCancellationRequested) return;
 
@@ -85,7 +86,7 @@ public class DeviceSyncGenericJob : BackgroundService
 
         foreach (var file in files)
         {
-            await ProcessFileAsync(file, masterEndpoint, agentId, archiveDir, batch, ct);
+            await ProcessFileAsync(file, masterEndpoint, agentId, archiveDir, transferMode, batch, ct);
             if (batch.Count >= 50)
             {
                 await PushBatchAsync(masterEndpoint, batch, ct);
@@ -98,11 +99,11 @@ public class DeviceSyncGenericJob : BackgroundService
         catch { }
 
         foreach (var sub in subDirs)
-            await ProcessDirectoryAsync(sub, masterEndpoint, agentId, archiveDir, batch, ct);
+            await ProcessDirectoryAsync(sub, masterEndpoint, agentId, archiveDir, transferMode, batch, ct);
     }
 
     private async Task ProcessFileAsync(string sourceFile, string masterEndpoint, string agentId,
-        string archiveDir, List<object> batch, CancellationToken ct)
+        string archiveDir, string transferMode, List<object> batch, CancellationToken ct)
     {
         var filename = Path.GetFileName(sourceFile);
         var ext = Path.GetExtension(sourceFile);
@@ -146,9 +147,12 @@ public class DeviceSyncGenericJob : BackgroundService
                     $"{Path.GetFileNameWithoutExtension(filename)}_{DateTime.Now.Ticks}{ext}");
             }
 
-            _logger.LogInformation("Importing {Source} → {Target}", sourceFile, targetFile);
+            _logger.LogInformation("Importing ({Mode}) {Source} → {Target}", transferMode, sourceFile, targetFile);
             Directory.CreateDirectory(targetDir);
-            File.Copy(sourceFile, targetFile, overwrite: false);
+            if (transferMode == "move")
+                File.Move(sourceFile, targetFile, overwrite: false);
+            else
+                File.Copy(sourceFile, targetFile, overwrite: false);
 
             batch.Add(new
             {

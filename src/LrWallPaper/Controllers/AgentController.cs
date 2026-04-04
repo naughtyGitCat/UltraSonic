@@ -94,5 +94,41 @@ public class AgentController : ControllerBase
         return Ok(results);
     }
 
+    [HttpGet("{id}/config")]
+    public async Task<IActionResult> GetAgentConfig(string id)
+    {
+        var agents = await _agentManager.GetAllAgentsAsync();
+        var agent = agents.FirstOrDefault(a => a.Id == id);
+        if (agent == null) return NotFound();
+
+        var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+        try
+        {
+            var resp = await client.GetStringAsync($"{agent.Endpoint.TrimEnd('/')}/api/agent/config");
+            return Content(resp, "application/json");
+        }
+        catch { return StatusCode(502); }
+    }
+
+    [HttpPut("{id}/config")]
+    public async Task<IActionResult> PutAgentConfig(string id)
+    {
+        var agents = await _agentManager.GetAllAgentsAsync();
+        var agent = agents.FirstOrDefault(a => a.Id == id);
+        if (agent == null) return NotFound();
+
+        var body = await Request.ReadFromJsonAsync<System.Text.Json.Nodes.JsonObject>();
+        if (body == null) return BadRequest();
+
+        var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+        try
+        {
+            var content = new StringContent(body.ToJsonString(), System.Text.Encoding.UTF8, "application/json");
+            var resp = await client.PutAsync($"{agent.Endpoint.TrimEnd('/')}/api/agent/config", content);
+            return resp.IsSuccessStatusCode ? Ok(new { message = "Agent config saved" }) : StatusCode((int)resp.StatusCode);
+        }
+        catch { return StatusCode(502); }
+    }
+
     private record VersionResponse(string Version);
 }

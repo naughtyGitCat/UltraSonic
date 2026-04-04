@@ -228,6 +228,39 @@ function TreeNodeView({ node, depth, selectedFolder, onSelect }: {
   );
 }
 
+function renderConfigFields(obj: Record<string, unknown>, path: string[], onUpdate: (path: string[], value: unknown) => void): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  const skipKeys = new Set(['Urls', 'Logging', 'AllowedHosts', 'EnableFullScan', 'MasterCluster']);
+  for (const [key, val] of Object.entries(obj)) {
+    if (skipKeys.has(key)) continue;
+    const currentPath = [...path, key];
+    const label = currentPath.join('.');
+    if (val && typeof val === 'object' && !Array.isArray(val)) {
+      nodes.push(<div key={label} style={{ gridColumn: '1 / -1', fontWeight: 'bold', marginTop: '6px', borderBottom: '1px solid #808080', paddingBottom: '2px' }}>{label}</div>);
+      nodes.push(...renderConfigFields(val as Record<string, unknown>, currentPath, onUpdate));
+    } else if (Array.isArray(val)) {
+      nodes.push(<label key={label + '_l'} style={{ textAlign: 'right' }}>{key}:</label>);
+      nodes.push(<input key={label + '_v'} type="text" value={(val as string[]).join(', ')}
+        onChange={e => onUpdate(currentPath, e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+        style={{ border: '2px inset #dfdfdf', padding: '2px 4px', fontSize: '11px', fontFamily: 'ms_sans_serif' }} />);
+    } else {
+      nodes.push(<label key={label + '_l'} style={{ textAlign: 'right' }}>{key}:</label>);
+      if (key.toLowerCase() === 'transfermode') {
+        nodes.push(<select key={label + '_v'} value={String(val || 'copy')}
+          onChange={e => onUpdate(currentPath, e.target.value)}
+          style={{ border: '2px inset #dfdfdf', padding: '2px', fontSize: '11px', fontFamily: 'ms_sans_serif' }}>
+          <option value="copy">copy</option><option value="move">move</option>
+        </select>);
+      } else {
+        nodes.push(<input key={label + '_v'} type={typeof val === 'number' ? 'number' : 'text'} value={String(val ?? '')}
+          onChange={e => onUpdate(currentPath, typeof val === 'number' ? Number(e.target.value) : e.target.value)}
+          style={{ border: '2px inset #dfdfdf', padding: '2px 4px', fontSize: '11px', fontFamily: 'ms_sans_serif' }} />);
+      }
+    }
+  }
+  return nodes;
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState(0);
 
@@ -268,6 +301,39 @@ function App() {
   const [agentHealth, setAgentHealth] = useState<Record<string, 'healthy' | 'unhealthy' | 'checking'>>({});
   const [newAgentName, setNewAgentName] = useState('');
   const [newAgentIp, setNewAgentIp] = useState('');
+
+  // Config State
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const [nodeConfig, setNodeConfig] = useState<Record<string, unknown> | null>(null);
+  const [configSaving, setConfigSaving] = useState(false);
+
+  const loadConfig = (nodeId: string) => {
+    if (editingNodeId === nodeId) { setEditingNodeId(null); return; }
+    setEditingNodeId(nodeId);
+    setNodeConfig(null);
+    const url = nodeId === 'local' ? '/api/master/config' : `/api/agent/${nodeId}/config`;
+    fetch(url).then(r => r.json()).then(setNodeConfig).catch(() => setNodeConfig(null));
+  };
+  const saveConfig = () => {
+    if (!editingNodeId || !nodeConfig) return;
+    setConfigSaving(true);
+    const url = editingNodeId === 'local' ? '/api/master/config' : `/api/agent/${editingNodeId}/config`;
+    fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nodeConfig) })
+      .then(r => { if (!r.ok) throw new Error('Save failed'); alert('Config saved'); })
+      .catch(err => alert('Failed: ' + err.message))
+      .finally(() => setConfigSaving(false));
+  };
+  const updateConfigField = (path: string[], value: unknown) => {
+    if (!nodeConfig) return;
+    const updated = JSON.parse(JSON.stringify(nodeConfig));
+    let obj = updated;
+    for (let i = 0; i < path.length - 1; i++) {
+      if (!obj[path[i]]) obj[path[i]] = {};
+      obj = obj[path[i]];
+    }
+    obj[path[path.length - 1]] = value;
+    setNodeConfig(updated);
+  };
 
   const observer = useRef<IntersectionObserver | null>(null);
   const filterVersion = useRef(0);
@@ -509,7 +575,8 @@ function App() {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        <TableRow>
+                        <TableRow style={{ cursor: 'pointer', backgroundColor: editingNodeId === 'local' ? '#000080' : undefined, color: editingNodeId === 'local' ? '#fff' : undefined }}
+                          onClick={() => loadConfig('local')}>
                           <TableDataCell>Master Local</TableDataCell>
                           <TableDataCell>{window.location.hostname}</TableDataCell>
                           <TableDataCell>5281</TableDataCell>
@@ -524,7 +591,8 @@ function App() {
                           let agentIp = '-', agentPort = '-';
                           try { const u = new URL(agent.endpoint); agentIp = u.hostname; agentPort = u.port; } catch {}
                           return (
-                          <TableRow key={agent.id}>
+                          <TableRow key={agent.id} style={{ cursor: 'pointer', backgroundColor: editingNodeId === agent.id ? '#000080' : undefined, color: editingNodeId === agent.id ? '#fff' : undefined }}
+                            onClick={() => loadConfig(agent.id)}>
                             <TableDataCell>{agent.name}</TableDataCell>
                             <TableDataCell>{agentIp}</TableDataCell>
                             <TableDataCell>{agentPort}</TableDataCell>
@@ -533,7 +601,7 @@ function App() {
                               {agentHealth[agent.id] === 'healthy' ? 'OK' : agentHealth[agent.id] === 'unhealthy' ? 'DOWN' : '...'}
                             </TableDataCell>
                             <TableDataCell>{agent.lastSeen ? new Date(agent.lastSeen).toLocaleString() : '-'}</TableDataCell>
-                            <TableDataCell style={{ display: 'flex', gap: '4px' }}>
+                            <TableDataCell style={{ display: 'flex', gap: '4px' }} onClick={e => e.stopPropagation()}>
                               <Button size="sm" onClick={() => {
                                 if (window.confirm(`Clear all records for "${agent.name}" and trigger rescan?`))
                                   fetch(`/api/experiment/agent/${agent.id}`, { method: 'DELETE' }).then(() => alert('Rescan triggered'));
@@ -545,6 +613,23 @@ function App() {
                       </TableBody>
                     </Table>
                   </ScrollView>
+
+                  {/* Config Editor Panel */}
+                  {editingNodeId && nodeConfig && (
+                    <GroupBox label={`Config: ${editingNodeId === 'local' ? 'Master' : agents.find(a => a.id === editingNodeId)?.name || editingNodeId}`}
+                      style={{ marginTop: '10px', maxHeight: '300px', overflow: 'auto' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '4px 8px', fontSize: '11px', alignItems: 'center' }}>
+                        {renderConfigFields(nodeConfig, [], updateConfigField)}
+                      </div>
+                      <div style={{ marginTop: '8px', display: 'flex', gap: '8px' }}>
+                        <Button onClick={saveConfig} disabled={configSaving}>{configSaving ? 'Saving...' : 'Save'}</Button>
+                        <Button onClick={() => setEditingNodeId(null)}>Cancel</Button>
+                      </div>
+                    </GroupBox>
+                  )}
+                  {editingNodeId && !nodeConfig && (
+                    <div style={{ marginTop: '10px', padding: '10px', fontSize: '12px', color: '#666' }}>Loading config...</div>
+                  )}
                 </div>
               )}
 
