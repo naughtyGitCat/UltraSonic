@@ -395,6 +395,7 @@ function App() {
                       <label>API Endpoint:</label>
                       <TextInput placeholder="e.g. http://192.168.1.100:5000" value={newAgentIp} onChange={(e) => setNewAgentIp(e.target.value)} style={{ width: '250px' }} />
                       <Button onClick={handleAddAgent}>Add Node</Button>
+                      <Button onClick={() => { fetchAgents(); fetch('/api/version').then(r => r.json()).then(d => setMasterVersion(d.version || '')).catch(() => {}); }}>Refresh</Button>
                     </div>
                   </fieldset>
                   <ScrollView style={{ height: '300px' }}>
