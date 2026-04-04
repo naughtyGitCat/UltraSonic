@@ -129,7 +129,7 @@ class Program
             var agent = agents.FirstOrDefault(a => a.Id == agentId);
             if (agent == null || string.IsNullOrEmpty(agent.Endpoint)) return Results.NotFound();
 
-            var client = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+            var client = new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromMinutes(5) };
             try {
                 var request = new HttpRequestMessage(HttpMethod.Get, $"{agent.Endpoint.TrimEnd('/')}/api/agent/image?path={Uri.EscapeDataString(path)}");
                 var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);

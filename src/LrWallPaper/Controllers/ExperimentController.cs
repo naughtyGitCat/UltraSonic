@@ -77,7 +77,7 @@ public class ExperimentController : ControllerBase
         {
             try
             {
-                var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                var client = new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(5) };
                 await client.PostAsync($"{agent.Endpoint.TrimEnd('/')}/api/agent/rescan", null);
             }
             catch (Exception ex)
@@ -130,7 +130,7 @@ public class ExperimentController : ControllerBase
                     var agent = agents.FirstOrDefault(a => a.Id == file.AgentId);
                     if (agent != null)
                     {
-                        var client = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+                        var client = new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(30) };
                         var resp = await client.PostAsJsonAsync(
                             $"{agent.Endpoint.TrimEnd('/')}/api/agent/move",
                             new { sourcePath = file.FileFullPath, targetPath });
@@ -179,7 +179,7 @@ public class ExperimentController : ControllerBase
             {
                 try
                 {
-                    var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                    var client = new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(10) };
                     await client.DeleteAsync($"{agent.Endpoint.TrimEnd('/')}/api/agent/file?path={Uri.EscapeDataString(capture.FileFullPath)}");
                 }
                 catch (Exception ex) { _logger.LogWarning(ex, "Failed to notify Agent to delete {Path}", capture.FileFullPath); }

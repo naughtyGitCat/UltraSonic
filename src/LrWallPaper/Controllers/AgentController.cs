@@ -46,7 +46,8 @@ public class AgentController : ControllerBase
     public async Task<IActionResult> GetStatus()
     {
         var agents = await _agentManager.GetAllAgentsAsync();
-        var client = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+        var handler = new HttpClientHandler { UseProxy = false };
+        var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(3) };
         var results = new List<object>();
 
         // Master self-check
@@ -101,7 +102,7 @@ public class AgentController : ControllerBase
         var agent = agents.FirstOrDefault(a => a.Id == id);
         if (agent == null) return NotFound();
 
-        var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+        var client = new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(5) };
         try
         {
             var resp = await client.GetStringAsync($"{agent.Endpoint.TrimEnd('/')}/api/agent/config");
@@ -120,7 +121,7 @@ public class AgentController : ControllerBase
         var body = await Request.ReadFromJsonAsync<System.Text.Json.Nodes.JsonObject>();
         if (body == null) return BadRequest();
 
-        var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+        var client = new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(5) };
         try
         {
             var content = new StringContent(body.ToJsonString(), System.Text.Encoding.UTF8, "application/json");
