@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using LrWallPaper.Models;
 using LrWallPaper.Services;
 
 namespace LrWallPaper.Jobs;
@@ -7,16 +8,22 @@ public class FileRenameJob : BackgroundService
 {
     private readonly ILogger<FileRenameJob> _logger;
     private readonly FileMD5Manager _md5Manager;
+    private readonly UltraSonicConfig _config;
 
     // Matches: IMG_001(1).JPG, IMG_001(2).HEIC, IMG_001 (1).JPG, IMG_001_1.JPG, IMG_001_2.CR2
     private static readonly Regex DuplicateSuffixRegex = new(
         @"^(.+?)\s?[\(_](\d{1,2})\)?(\.\w+)$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-    public FileRenameJob(ILogger<FileRenameJob> logger, FileMD5Manager md5Manager)
+    // iCloud for Windows syncs photos from multiple devices and adds (2), (3) suffixes
+    // to disambiguate — these are NOT duplicates, so we must skip them.
+    private static readonly string[] ICloudPathMarkers = ["icloud", "iCloud Photos"];
+
+    public FileRenameJob(ILogger<FileRenameJob> logger, FileMD5Manager md5Manager, UltraSonicConfig config)
     {
         _logger = logger;
         _md5Manager = md5Manager;
+        _config = config;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -51,6 +58,13 @@ public class FileRenameJob : BackgroundService
             if (!string.IsNullOrEmpty(file.AgentId) && file.AgentId != "local")
                 continue;
 
+            // Skip files in iCloud-synced directories (suffixes like (2) are device disambiguation, not duplicates)
+            if (IsInICloudDirectory(file.FilePath))
+            {
+                _logger.LogDebug("Skipping iCloud file: {File}", file.FileName);
+                continue;
+            }
+
             var match = DuplicateSuffixRegex.Match(file.FileName);
             if (!match.Success) continue;
 
@@ -67,6 +81,23 @@ public class FileRenameJob : BackgroundService
                 _logger.LogWarning(ex, "Failed to rename {File}", file.FileFullPath);
             }
         }
+    }
+
+    private bool IsInICloudDirectory(string filePath)
+    {
+        // Check against known iCloud path markers
+        foreach (var marker in ICloudPathMarkers)
+        {
+            if (filePath.Contains(marker, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        // Also check against configured SkipDirectories (user may have added custom iCloud paths)
+        foreach (var skipDir in _config.LocalScan.SkipDirectories)
+        {
+            if (!string.IsNullOrEmpty(skipDir) && filePath.StartsWith(skipDir, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 
     private async Task TryRename(FileMD5Entity file, string targetName, string baseName, string ext)
