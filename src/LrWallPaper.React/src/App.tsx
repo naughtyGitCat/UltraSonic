@@ -57,12 +57,24 @@ interface FilterOptions {
   agentIds: string[];
 }
 
+interface ScanStatus {
+  isScanning?: boolean;
+  currentFile?: string;
+  filesProcessed?: number;
+  lastScanStart?: string;
+  lastScanEnd?: string;
+  lastScanDurationSeconds?: number;
+  nextScanTime?: string;
+  lastError?: string;
+}
+
 interface Agent {
   id: string;
   name: string;
   endpoint: string;
   version?: string;
   lastSeen?: string;
+  scanStatus?: ScanStatus;
 }
 
 function formatFileSize(bytes?: number): string {
@@ -404,11 +416,11 @@ function App() {
   useEffect(() => { if (activeTab === 1) fetchAgents(); }, [activeTab]);
 
   const fetchAgents = () => {
-    fetch('/api/agent/status').then(r => r.json()).then((data: Array<{id:string;name:string;endpoint:string;version:string;health:string;lastSeen?:string}>) => {
+    fetch('/api/agent/status').then(r => r.json()).then((data: Array<{id:string;name:string;endpoint:string;version:string;health:string;lastSeen?:string;scanStatus?:ScanStatus}>) => {
       const master = data.find(d => d.id === 'local');
       if (master) { setMasterVersion(master.version); setMasterHealth(master.health === 'healthy' ? 'healthy' : 'unhealthy'); }
       const agentList = data.filter(d => d.id !== 'local');
-      setAgents(agentList.map(a => ({ id: a.id, name: a.name, endpoint: a.endpoint, version: a.version, lastSeen: a.lastSeen })));
+      setAgents(agentList.map(a => ({ id: a.id, name: a.name, endpoint: a.endpoint, version: a.version, lastSeen: a.lastSeen, scanStatus: a.scanStatus })));
       const h: Record<string, 'healthy' | 'unhealthy' | 'checking'> = {};
       agentList.forEach(a => { h[a.id] = a.health === 'healthy' ? 'healthy' : 'unhealthy'; });
       setAgentHealth(h);
@@ -613,6 +625,29 @@ function App() {
                       </TableBody>
                     </Table>
                   </ScrollView>
+
+                  {/* Scan Status Panel */}
+                  {editingNodeId && editingNodeId !== 'local' && (() => {
+                    const a = agents.find(x => x.id === editingNodeId);
+                    const s = a?.scanStatus;
+                    if (!s) return null;
+                    const fmtDur = (sec?: number) => { if (!sec) return '-'; const m = Math.floor(sec / 60); const ss = Math.floor(sec % 60); return m > 0 ? `${m}m ${ss}s` : `${ss}s`; };
+                    const fmtTime = (t?: string) => t ? new Date(t).toLocaleString() : '-';
+                    return (
+                      <GroupBox label="Scan Status" style={{ marginTop: '10px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '2px 8px', fontSize: '11px' }}>
+                          <b>Status:</b><span style={{ color: s.isScanning ? '#008000' : '#666' }}>{s.isScanning ? 'Scanning...' : 'Idle'}</span>
+                          {s.isScanning && <><b>Current File:</b><span style={{ wordBreak: 'break-all' }}>{s.currentFile || '-'}</span></>}
+                          {s.isScanning && <><b>Files Processed:</b><span>{s.filesProcessed ?? 0}</span></>}
+                          <b>Last Scan Start:</b><span>{fmtTime(s.lastScanStart)}</span>
+                          <b>Last Scan End:</b><span>{fmtTime(s.lastScanEnd)}</span>
+                          <b>Last Scan Duration:</b><span>{fmtDur(s.lastScanDurationSeconds)}</span>
+                          <b>Next Scan:</b><span>{fmtTime(s.nextScanTime)}</span>
+                          {s.lastError && <><b style={{ color: 'red' }}>Last Error:</b><span style={{ color: 'red' }}>{s.lastError}</span></>}
+                        </div>
+                      </GroupBox>
+                    );
+                  })()}
 
                   {/* Config Editor Panel */}
                   {editingNodeId && nodeConfig && (

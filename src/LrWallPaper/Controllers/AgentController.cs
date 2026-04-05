@@ -75,11 +75,18 @@ public class AgentController : ControllerBase
             }
             catch { }
 
-            // Also try to get latest version from agent
+            // Also try to get latest version and scan status from agent
+            object? scanStatus = null;
             try
             {
                 var vResp = await client.GetFromJsonAsync<VersionResponse>($"{agent.Endpoint.TrimEnd('/')}/api/agent/version");
                 if (vResp?.Version != null) version = vResp.Version;
+            }
+            catch { }
+            try
+            {
+                var ssResp = await client.GetStringAsync($"{agent.Endpoint.TrimEnd('/')}/api/agent/scan-status");
+                scanStatus = System.Text.Json.JsonSerializer.Deserialize<object>(ssResp);
             }
             catch { }
 
@@ -89,7 +96,8 @@ public class AgentController : ControllerBase
                 endpoint = agent.Endpoint,
                 version,
                 health,
-                lastSeen = agent.LastSeen?.ToString("yyyy-MM-dd HH:mm:ss")
+                lastSeen = agent.LastSeen?.ToString("yyyy-MM-dd HH:mm:ss"),
+                scanStatus
             });
         }
         return Ok(results);

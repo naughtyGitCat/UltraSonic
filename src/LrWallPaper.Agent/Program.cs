@@ -82,6 +82,18 @@ app.MapGet("/api/agent/image", (string path, AgentState agentState) =>
 
 app.MapGet("/api/agent/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.Now }));
 
+app.MapGet("/api/agent/scan-status", (AgentState agentState) => Results.Ok(new
+{
+    isScanning = agentState.IsScanning,
+    currentFile = agentState.CurrentFile,
+    filesProcessed = agentState.FilesProcessed,
+    lastScanStart = agentState.LastScanStart,
+    lastScanEnd = agentState.LastScanEnd,
+    lastScanDurationSeconds = agentState.LastScanDuration?.TotalSeconds,
+    nextScanTime = agentState.NextScanTime,
+    lastError = agentState.LastError
+}));
+
 app.MapGet("/api/agent/version", () =>
 {
     var asm = System.Reflection.Assembly.GetExecutingAssembly();

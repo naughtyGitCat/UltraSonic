@@ -72,6 +72,13 @@ public class ScanAndPushJob : BackgroundService
             _logger.LogInformation("Agent {Id} starting scan. Master={Master}, Paths={Paths}, Interval={Min}m",
                 agentId, masterEndpoint, string.Join(";", scanPaths), intervalMinutes);
 
+            _agentState.IsScanning = true;
+            _agentState.LastScanStart = DateTime.Now;
+            _agentState.FilesProcessed = 0;
+            _agentState.FilesTotal = 0;
+            _agentState.CurrentFile = null;
+            _agentState.LastError = null;
+
             foreach (var scanPath in scanPaths)
             {
                 if (!Directory.Exists(scanPath))
@@ -94,6 +101,8 @@ public class ScanAndPushJob : BackgroundService
                         var fileInfo = new FileInfo(filePath);
                         var fileSizeMB = fileInfo.Length / (1024.0 * 1024.0);
                         _logger.LogDebug("Processing: {File} ({Size:F1} MB)", filePath, fileSizeMB);
+                        _agentState.CurrentFile = filePath;
+                        _agentState.FilesProcessed = fileCount;
 
                         // Skip if Master already has this file (saves MD5 computation on large files)
                         if (await FileExistsOnMaster(masterEndpoint, Path.GetFileName(filePath), fileInfo.Length))
@@ -144,7 +153,13 @@ public class ScanAndPushJob : BackgroundService
                 _logger.LogInformation("Scan complete for {Path}, processed {Count} files", scanPath, fileCount);
             }
 
-            _logger.LogInformation("Next scan in {Min} minutes (or on manual trigger).", intervalMinutes);
+            _agentState.IsScanning = false;
+            _agentState.LastScanEnd = DateTime.Now;
+            _agentState.LastScanDuration = _agentState.LastScanEnd - _agentState.LastScanStart;
+            _agentState.CurrentFile = null;
+            _agentState.NextScanTime = DateTime.Now.AddMinutes(intervalMinutes);
+            _logger.LogInformation("Scan finished in {Duration}. Next scan at {Next}.",
+                _agentState.LastScanDuration?.ToString(@"hh\:mm\:ss"), _agentState.NextScanTime?.ToString("HH:mm:ss"));
 
             // Wait for scheduled interval or manual rescan trigger
             _agentState.WaitForRescan(TimeSpan.FromMinutes(intervalMinutes));
@@ -152,6 +167,9 @@ public class ScanAndPushJob : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "ScanAndPushJob encountered an unhandled error, will retry in 60s");
+                _agentState.IsScanning = false;
+                _agentState.LastError = ex.Message;
+                _agentState.NextScanTime = DateTime.Now.AddSeconds(60);
                 _agentState.WaitForRescan(TimeSpan.FromSeconds(60));
             }
         }
