@@ -91,7 +91,17 @@ public class ScanAndPushJob : BackgroundService
 
                     try
                     {
-                        _logger.LogDebug("Processing: {File}", filePath);
+                        var fileInfo = new FileInfo(filePath);
+                        var fileSizeMB = fileInfo.Length / (1024.0 * 1024.0);
+                        _logger.LogDebug("Processing: {File} ({Size:F1} MB)", filePath, fileSizeMB);
+
+                        // Skip if Master already has this file (saves MD5 computation on large files)
+                        if (await FileExistsOnMaster(masterEndpoint, Path.GetFileName(filePath), fileInfo.Length))
+                        {
+                            fileCount++;
+                            continue;
+                        }
+
                         var md5 = ComputeMD5(filePath);
                         var exif = ReadExif(filePath);
 
@@ -268,6 +278,18 @@ public class ScanAndPushJob : BackgroundService
         if (long.TryParse(raw.Split(' ').First(), out var size)) return size;
         return null;
     }
+
+    private async Task<bool> FileExistsOnMaster(string masterEndpoint, string filename, long size)
+    {
+        try
+        {
+            var url = $"{masterEndpoint.TrimEnd('/')}/api/master/file-exists?filename={Uri.EscapeDataString(filename)}&size={size}";
+            var resp = await _httpClient.GetFromJsonAsync<FileExistsResp>(url);
+            return resp?.Exists ?? false;
+        }
+        catch { return false; }
+    }
+    private record FileExistsResp(bool Exists);
 
     private static string GetLocalIpAddress()
     {
