@@ -93,3 +93,101 @@ Development resources and articles referenced during the initial design and impl
 
 24. [How do I change the desktop background using C#](https://www.codeproject.com/Questions/1252479/How-do-I-change-the-desktop-background-using-Cshar)
     > CodeProject Q&A：C# 更换桌面背景的兼容性方案
+
+---
+
+## Android ADB Communication
+
+25. [AdvancedSharpAdbClient - .NET ADB library](https://github.com/SharpAdb/AdvancedSharpAdbClient/tree/main)
+    > .NET/Mono/Unity 通过 ADB 协议与 Android 设备通信的库
+
+26. [Android.Hardware.Usb 命名空间](https://learn.microsoft.com/zh-cn/dotnet/api/android.hardware.usb?view=net-android-34.0)
+    > .NET for Android 中 USB 硬件访问 API 的命名空间文档
+
+27. [USB Communication Between Android App and PC Using C#](https://stackoverflow.com/questions/78756730/usb-communication-between-android-app-and-pc-using-c-sharp)
+    > C# 与 Android 设备之间的 USB 通信方案讨论
+
+---
+
+## Apple Frameworks & AFC
+
+28. [Apple Public Frameworks List - The Apple Wiki](https://theapplewiki.com/index.php?title=Special:Ask&limit=100&offset=0&q=%5B%5BCategory%3AFrameworks%2FPublic%5D%5D&p=mainlabel%3D%2Fformat%3D-20ul%2Flink%3D-20none%2Ftemplate%3D-20Framework-20name&sort=&order=asc&eq=no#search)
+    > Apple 公开框架完整列表，用于了解 iOS 系统能力
+
+29. [Dev:IOKit.framework - The Apple Wiki](https://theapplewiki.com/wiki/Dev:IOKit.framework)
+    > IOKit 框架文档，iOS 设备硬件访问的底层接口
+
+30. [Core Image | Apple Developer Documentation](https://developer.apple.com/documentation/coreimage)
+    > Apple Core Image 框架，图像处理和滤镜 API
+
+31. [Dev:CoreMedia.framework - The Apple Wiki](https://theapplewiki.com/wiki/Dev:CoreMedia.framework)
+    > CoreMedia 框架，iOS 多媒体数据的底层表示和处理
+
+32. [mediaSubType(_:) | Apple Developer Documentation](https://developer.apple.com/documentation/coremedia/cmtag-swift.class/mediasubtype(_:))
+    > CoreMedia 中 CMTag 的媒体子类型定义
+
+33. [Dev:UIImage - The Apple Wiki](https://theapplewiki.com/wiki/Dev:UIImage)
+    > UIImage 内部实现细节，iOS 图像对象的底层结构
+
+34. [iPhone 的 AFC (Apple File Conduit)](https://blog.csdn.net/xqhrs232/article/details/104159141)
+    > AFC 协议详解：通过 USB 访问 iPhone 文件系统的机制
+
+35. [/System/Library/Lockdown/Services.plist - The iPhone Wiki](https://www.theiphonewiki.com/wiki//System/Library/Lockdown/Services.plist)
+    > iOS Lockdown 服务列表，AFC/安装等服务的 plist 定义
+
+36. [Information Property List | Apple Developer Documentation](https://developer.apple.com/documentation/bundleresources/information-property-list)
+    > Info.plist 配置项参考，iOS/macOS 应用的 Bundle 元数据
+
+---
+
+## EXIF / GPS Metadata (Swift / iOS)
+
+37. [Swift's Photos API: Injecting GPS Data into Image EXIF Metadata](https://www.howtoinswift.tech/blog/2023/Swift-s-Photos-API-Explored-Injecting-GPS-Data-into-Image-EXIF-Metadata)
+    > Swift 通过 Photos API 向图片 EXIF 写入 GPS 坐标
+
+38. [How get Exif information using Swift | Apple Developer Forums](https://forums.developer.apple.com/forums/thread/52477)
+    > Swift 读取图片 EXIF 信息的官方论坛讨论
+
+39. [Accessing Image EXIF Data / Creation Date / Location](https://www.hackingwithswift.com/forums/swiftui/accessing-image-exif-data-creation-date-location-of-an-image/1429)
+    > SwiftUI 中获取图片 EXIF 拍摄时间和 GPS 位置
+
+40. [Photo Metadata PHPickerView](https://www.felixlarsen.com/blog/photo-metadata-phpickerview)
+    > PHPickerViewController 选择照片后获取元数据的方法
+
+41. [Image I/O | Apple Developer Documentation](https://developer.apple.com/documentation/imageio)
+    > Apple Image I/O 框架，支持读写图片元数据（含 EXIF/GPS）
+
+---
+
+## Geolocation / GPS (.NET)
+
+42. [System.Device.Location Namespace | Microsoft Learn](https://learn.microsoft.com/en-us/dotnet/api/system.device.location?view=netframework-4.8.1)
+    > .NET Framework 地理位置 API 命名空间文档
+
+43. [System.Device - Port to .NET Core](https://github.com/dotMorten/System.Device)
+    > 将 .NET Framework 的 System.Device API 移植到 .NET Core
+
+44. [Geolocation - C# coordinate distance calculator](https://github.com/scottschluer/geolocation)
+    > C# 地理坐标距离计算库，支持经纬度距离和方位角
+
+45. [Find Distance Between 2 Coordinates in .NET Core](https://stackoverflow.com/questions/60700865/find-distance-between-2-coordinates-in-net-core)
+    > .NET Core 中计算两个 GPS 坐标之间距离的方法
+
+46. [How to Get User Geolocation in ASP.NET Core Web API](https://stackoverflow.com/questions/73881966/how-to-get-user-geolocation-in-asp-net-core-web-api)
+    > ASP.NET Core Web API 中获取用户地理位置
+
+47. [Geo - Geometry abstractions for .NET](https://github.com/sibartlett/Geo/blob/master/Geo/Abstractions/Geometry.cs)
+    > .NET 地理空间几何抽象类库，点/线/多边形建模
+
+---
+
+## QuickTime / Video GPS Metadata
+
+48. [Location metadata | Apple Developer Documentation](https://developer.apple.com/documentation/quicktime-file-format/location_metadata)
+    > QuickTime 文件格式中 GPS 位置元数据的存储规范（ISO 6709）
+
+49. [QuickTime metadata keys | Apple Developer Documentation](https://developer.apple.com/documentation/quicktime-file-format/quicktime_metadata_keys)
+    > QuickTime 元数据键值定义，含位置、创建时间等标准键
+
+50. [Getting GPS Coordinates of a Video in Camera Roll on iPhone](https://stackoverflow.com/questions/9742707/getting-gps-coordinates-of-a-video-in-camera-roll-on-iphone)
+    > 从 iPhone 相册视频中提取 GPS 坐标的方法
