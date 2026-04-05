@@ -183,6 +183,12 @@ The `ultrasonic.db` file in `Program Files` may be read-only. Grant write permis
 
 ---
 
+## References
+
+See [`docs/references.md`](docs/references.md) for development resources referenced during design and implementation.
+
+---
+
 ## License
 
 MIT

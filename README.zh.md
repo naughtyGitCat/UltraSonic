@@ -183,6 +183,12 @@ GPS 提取是后加的功能。在 Node Config 中点击 **Rescan** 重新扫描
 
 ---
 
+## 参考资料
+
+开发过程中参考的文档和文章见 [`docs/references.md`](docs/references.md)。
+
+---
+
 ## License
 
 MIT
