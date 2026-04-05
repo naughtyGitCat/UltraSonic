@@ -54,6 +54,31 @@ public class ExperimentController : ControllerBase
         return Ok(capture);
     }
 
+    /// <summary>
+    /// Find the Live Photo MOV companion for a given HEIC/JPG file.
+    /// Returns the MOV record if found, 404 otherwise.
+    /// </summary>
+    [HttpGet("live-photo/{id:long}")]
+    public async Task<IActionResult> GetLivePhotoMov(long id)
+    {
+        var capture = await _md5Manager.GetCaptureByIdAsync(id);
+        if (capture == null) return NotFound();
+
+        var ext = Path.GetExtension(capture.FileName).ToLowerInvariant();
+        if (ext is not (".heic" or ".jpg" or ".jpeg")) return NotFound();
+
+        // Look for same-name .MOV in same directory
+        var baseName = Path.GetFileNameWithoutExtension(capture.FileName);
+        var movName = baseName + ".MOV";
+        var candidates = await _md5Manager.GetFilesByFolderAsync(capture.FilePath, capture.AgentId);
+        var mov = candidates.FirstOrDefault(f =>
+            f.FileName.Equals(movName, StringComparison.OrdinalIgnoreCase) &&
+            f.FileName != capture.FileName);
+
+        if (mov == null) return NotFound();
+        return Ok(mov);
+    }
+
     [HttpDelete("{id:long}")]
     public async Task<IActionResult> Delete(long id)
     {

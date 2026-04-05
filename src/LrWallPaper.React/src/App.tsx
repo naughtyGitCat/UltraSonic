@@ -109,8 +109,24 @@ function DetailModal({ capture, captures, index, onClose, onNavigate, onDelete }
 }) {
   const ext = getExt(capture.fileName);
   const isVideo = VIDEO_EXTS.includes(ext);
+  const isPhoto = !isVideo;
   const absolutePath = capture.fileFullPath || `${capture.filePath}\\${capture.fileName}`;
   const imgSrc = `/api/image?path=${encodeURIComponent(absolutePath)}&agentId=${capture.agentId || 'local'}`;
+
+  // Live Photo: check for companion MOV
+  const [livePhotoMov, setLivePhotoMov] = useState<Capture | null>(null);
+  const [showLivePhoto, setShowLivePhoto] = useState(false);
+
+  useEffect(() => {
+    setLivePhotoMov(null);
+    setShowLivePhoto(false);
+    if (isPhoto && capture.id && ['.heic', '.jpg', '.jpeg'].includes(ext)) {
+      fetch(`/api/experiment/live-photo/${capture.id}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => setLivePhotoMov(d))
+        .catch(() => {});
+    }
+  }, [capture.id]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -133,10 +149,25 @@ function DetailModal({ capture, captures, index, onClose, onNavigate, onDelete }
         </WindowHeader>
         <WindowContent style={{ flexGrow: 1, display: 'flex', gap: '10px', padding: '8px', minHeight: 0, overflow: 'hidden' }}>
           <div style={{ flex: '1 1 70%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <div style={{ flexGrow: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#000', border: '2px inset #dfdfdf' }}>
+            <div style={{ flexGrow: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#000', border: '2px inset #dfdfdf', position: 'relative' }}>
               {isVideo
                 ? <video src={imgSrc} controls style={{ maxWidth: '100%', maxHeight: '100%' }} />
-                : <img src={imgSrc} alt={capture.fileName} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />}
+                : showLivePhoto && livePhotoMov
+                  ? <video
+                      src={`/api/image?path=${encodeURIComponent(livePhotoMov.fileFullPath || `${livePhotoMov.filePath}\\${livePhotoMov.fileName}`)}&agentId=${livePhotoMov.agentId || 'local'}`}
+                      autoPlay loop muted style={{ maxWidth: '100%', maxHeight: '100%' }} />
+                  : <img src={imgSrc} alt={capture.fileName} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />}
+              {livePhotoMov && (
+                <div style={{ position: 'absolute', top: '8px', left: '8px' }}>
+                  <Button size="sm" active={showLivePhoto}
+                    onMouseDown={() => setShowLivePhoto(true)}
+                    onMouseUp={() => setShowLivePhoto(false)}
+                    onMouseLeave={() => setShowLivePhoto(false)}
+                    onClick={() => setShowLivePhoto(!showLivePhoto)}>
+                    LIVE
+                  </Button>
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '6px', flexShrink: 0 }}>
               <Button disabled={index <= 0} onClick={() => onNavigate(index - 1)}>&lt; Prev</Button>
