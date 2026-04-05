@@ -245,11 +245,38 @@ namespace LrWallPaper.Services
             return await db.FetchAsync<FileMD5Entity>(sql, pageSize, (page - 1) * pageSize);
         }
 
+        // Regex to strip iCloud disambiguation suffixes: IMG_001(2).HEIC -> IMG_001, .HEIC
+        private static readonly System.Text.RegularExpressions.Regex ICloudSuffixRegex = new(
+            @"^(.+?)\s?\(\d+\)(\.\w+)$",
+            System.Text.RegularExpressions.RegexOptions.Compiled);
+
         public async Task<bool> FileExistsAsync(string filename, long fileSize)
         {
             using var db = OpenDb();
+            // 1. Exact match: same filename + size
             var sql = "SELECT COUNT(1) FROM file_info WHERE filename = @0 AND file_size = @1";
             var count = await db.ExecuteScalarAsync<int>(sql, filename, fileSize);
+            if (count > 0) return true;
+
+            // 2. Fuzzy match: check if an iCloud variant exists (with or without (N) suffix)
+            //    e.g. iPhone has IMG_001.HEIC, iCloud synced as IMG_001(2).HEIC — or vice versa
+            var baseName = filename;
+            var ext = Path.GetExtension(filename);
+            var nameNoExt = Path.GetFileNameWithoutExtension(filename);
+
+            // If filename HAS a suffix like (2), try without it
+            var match = ICloudSuffixRegex.Match(filename);
+            if (match.Success)
+            {
+                baseName = match.Groups[1].Value + match.Groups[2].Value;
+                count = await db.ExecuteScalarAsync<int>(sql, baseName, fileSize);
+                if (count > 0) return true;
+            }
+
+            // If filename has NO suffix, try with common (N) variants
+            var likeSql = "SELECT COUNT(1) FROM file_info WHERE filename LIKE @0 AND file_size = @1";
+            var pattern = $"{nameNoExt}(%){ext}";
+            count = await db.ExecuteScalarAsync<int>(likeSql, pattern, fileSize);
             return count > 0;
         }
 
