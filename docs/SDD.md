@@ -247,6 +247,39 @@ Program.cs
 - 首次扫描时生成 UUID，回写到 appsettings.json
 - 后续重启使用固定 ID，确保数据库中 agent_id 一致
 
+### 4.5 iCloud + AFC 协同导入策略
+
+iOS 照片导入采用 **iCloud for Windows 为主、USB AFC 为辅** 的策略，避免重复导入：
+
+```
+iPhone 拍照 IMG_0001.HEIC
+     │
+     ├──► iCloud 上传 ──► iCloud for Windows 下载到 PC
+     │                    D:\iCloud Photos\Photos\
+     │                    IMG_0001.HEIC 或 IMG_0001(2).HEIC（多设备）
+     │                           │
+     │               Agent ScanPaths 扫描 ──► Master DB
+     │
+     └──► USB AFC ──► DeviceSyncAppleJob
+                      │
+                 file-exists 三级预检:
+                 ① 精确匹配: filename + size
+                 ② 去后缀匹配: IMG_0001(2).HEIC → IMG_0001.HEIC + size
+                 ③ LIKE 匹配: IMG_0001(%).HEIC + size
+                      │
+                 已存在 → 跳过下载（节省 USB 带宽）
+                 不存在 → AFC 拉取（新拍的，iCloud 还没同步的）
+```
+
+**配置要点**：
+- Agent 的 `ScanPaths` 应包含 iCloud for Windows 的照片目录（如 `D:\iCloud Photos\Photos`）
+- iCloud for Windows 设置中选择"下载所有照片到此电脑"
+- 如果 iPhone 开启"优化 iPhone 存储空间"，AFC 拿到的可能是压缩版，iCloud 下载的才是原图
+
+**多设备文件名冲突**：iCloud 用 `(2)` `(3)` 后缀区分不同设备的同名文件（如两台 iPhone 都有 `IMG_0001.HEIC`）。`file-exists` 的模糊匹配确保 AFC 能正确识别这些已同步的文件。
+
+**FileRenameJob 保护**：iCloud 目录下的 `(N)` 后缀不会被 FileRenameJob 去除——这些不是重复文件，而是不同设备的区分标识。
+
 ---
 
 ## 5. 数据设计

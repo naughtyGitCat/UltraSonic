@@ -17,9 +17,9 @@
 
 ### 分布式架构
 - **Agent 扫描**：定期扫描本地目录，推送 EXIF/GPS 元数据 + MD5 指纹到 Master
-- **iOS 导入**：USB AFC 访问 DCIM，自动过滤 PNG 截图，按拍摄日期归档
+- **iOS 导入（iCloud + AFC）**：以 iCloud for Windows 为主、USB AFC 为辅。模糊 file-exists 检查处理 iCloud 对多设备同名文件添加的 `(2)` 后缀
 - **可移动存储导入**：自动检测 SD 卡/相机，支持复制或移动传输模式，自动过滤截图
-- **MD5 去重**：`filename + file_md5` 唯一约束，Agent 导入前向 Master 预查询
+- **MD5 去重**：`filename + file_md5` 唯一约束，Agent 导入前向 Master 预查询（含 iCloud 文件名模糊匹配）
 - **多 Master Gossip 同步**：应用层 P2P 广播实现最终一致性
 - **Agent 自动注册**：每次扫描前自动注册到 Master（实际 LAN IP、版本号、心跳）
 
@@ -118,6 +118,19 @@ cd src/LrWallPaper.Agent && dotnet run
 | `AgentId` | 设为 `"auto"` 则首次启动自动生成 UUID 并持久化 |
 | `TransferMode` | `"copy"`（保留源文件）或 `"move"`（移动后删除源文件） |
 | `MasterCluster.Peers` | Peer Master URL 数组，用于 Gossip 同步 |
+
+### iOS 照片导入策略
+
+UltraSonic 采用 **iCloud for Windows 为主、USB AFC 为辅** 的导入策略：
+
+1. 安装 [iCloud for Windows](https://apps.microsoft.com/detail/9PKTQ5699M62)，开启"下载所有照片到此电脑"
+2. 将 iCloud 照片目录加入 `Agent:ScanPaths`（如 `"D:\\iCloud Photos\\Photos"`）
+3. Agent 优先扫描 iCloud 照片并索引到 Master
+4. iPhone 通过 USB 连接时，DeviceSyncAppleJob 先向 Master 预检
+5. 已通过 iCloud 同步的照片会被跳过（模糊文件名匹配处理 `(2)` 后缀）
+6. 仅拉取 iCloud 尚未同步的新拍照片
+
+> **注意**：如果 iPhone 开启了"优化 iPhone 存储空间"，AFC 只能拿到压缩后的缩略图。请使用 iCloud for Windows 获取原图。
 
 ---
 

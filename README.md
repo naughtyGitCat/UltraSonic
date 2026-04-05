@@ -17,9 +17,9 @@ A distributed local photo / RAW management platform. The **Master-Agent** archit
 
 ### Distributed Architecture
 - **Agent scanning**: Agent nodes periodically scan local folders and push EXIF/GPS metadata + MD5 fingerprints to Master
-- **iOS import**: USB AFC access to DCIM, auto-filter PNG screenshots, archive by capture date
+- **iOS import (iCloud + AFC)**: iCloud for Windows as primary source, USB AFC as supplement for not-yet-synced photos. Fuzzy file-exists check handles iCloud's `(2)` suffix disambiguation across multiple iOS devices
 - **Removable storage import**: Auto-detect SD cards/cameras, configurable copy or move transfer mode, screenshot filtering
-- **MD5 de-duplication**: `UNIQUE (filename, file_md5)` constraint; Agents pre-check with Master before downloading
+- **MD5 de-duplication**: `UNIQUE (filename, file_md5)` constraint; Agents pre-check with Master before downloading (with iCloud filename fuzzy matching)
 - **Multi-Master Gossip sync**: Eventual-consistency replication via application-layer P2P broadcast
 - **Auto agent registration**: Agents register with Master on each scan cycle (actual LAN IP, version, heartbeat)
 
@@ -118,6 +118,19 @@ All settings can be edited from the **Node Config** tab in the web UI, or direct
 | `AgentId` | Set to `"auto"` to generate and persist a UUID on first run |
 | `TransferMode` | `"copy"` (keep source) or `"move"` (delete source after import) |
 | `MasterCluster.Peers` | Array of peer Master URLs for Gossip sync |
+
+### iOS Photo Import Strategy
+
+UltraSonic uses **iCloud for Windows as the primary source** and **USB AFC as a supplement**:
+
+1. Install [iCloud for Windows](https://apps.microsoft.com/detail/9PKTQ5699M62) and enable "Download all photos to this PC"
+2. Add the iCloud photos directory to `Agent:ScanPaths` (e.g. `"D:\\iCloud Photos\\Photos"`)
+3. Agent scans iCloud photos first, indexing them into Master
+4. When an iPhone is connected via USB, DeviceSyncAppleJob checks Master before downloading
+5. Photos already synced via iCloud are skipped (fuzzy filename matching handles `(2)` suffixes)
+6. Only truly new photos (not yet uploaded to iCloud) are pulled via AFC
+
+> **Note**: If "Optimize iPhone Storage" is enabled on your iPhone, AFC will only get compressed thumbnails. Use iCloud for Windows to get full-resolution originals.
 
 ---
 
