@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Serilog;
 using Serilog.Events;
 using ImageMagick;
@@ -39,6 +41,16 @@ if (app.Environment.IsDevelopment())
 app.UseAuthorization();
 app.MapControllers();
 
+// Cache directory
+var agentCacheDir = Path.Combine(AppContext.BaseDirectory, "cache");
+Directory.CreateDirectory(agentCacheDir);
+
+string PathCacheKey(string filePath)
+{
+    var hash = MD5.HashData(Encoding.UTF8.GetBytes(filePath));
+    return Convert.ToHexString(hash).ToLowerInvariant();
+}
+
 // Image streaming endpoint
 app.MapGet("/api/agent/image", (string path, AgentState agentState) =>
 {
@@ -71,9 +83,19 @@ app.MapGet("/api/agent/image", (string path, AgentState agentState) =>
     var needsConvert = new HashSet<string> { ".heic", ".cr2", ".cr3", ".nef", ".nrw", ".arw", ".sr2", ".srf", ".dng", ".raf", ".pef", ".rw2", ".orf" };
     if (needsConvert.Contains(ext))
     {
+        // Check cache
+        var cacheKey = PathCacheKey(path);
+        var cachePath = Path.Combine(agentCacheDir, $"{cacheKey}.jpg");
+        if (System.IO.File.Exists(cachePath))
+            return Results.File(cachePath, "image/jpeg", enableRangeProcessing: true);
+
         using var image = new MagickImage(path);
         var ms = new MemoryStream();
         image.Write(ms, MagickFormat.Jpeg);
+
+        // Write cache
+        try { System.IO.File.WriteAllBytes(cachePath, ms.ToArray()); } catch { }
+
         ms.Position = 0;
         return Results.File(ms, "image/jpeg");
     }
@@ -114,6 +136,19 @@ app.MapDelete("/api/agent/file", (string path, AgentState agentState) =>
 
     System.IO.File.Delete(path);
     return Results.Ok();
+});
+
+// Cache management
+app.MapDelete("/api/agent/cache", () =>
+{
+    long cleared = 0;
+    if (Directory.Exists(agentCacheDir))
+    {
+        var files = Directory.GetFiles(agentCacheDir);
+        cleared = files.Length;
+        foreach (var f in files) try { System.IO.File.Delete(f); } catch { }
+    }
+    return Results.Ok(new { cleared });
 });
 
 // Trigger immediate rescan

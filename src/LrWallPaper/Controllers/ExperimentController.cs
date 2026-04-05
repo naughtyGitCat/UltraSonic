@@ -60,6 +60,7 @@ public class ExperimentController : ControllerBase
         var capture = await _md5Manager.GetCaptureByIdAsync(id);
         if (capture == null) return NotFound();
         await DeletePhysicalFile(capture);
+        DeleteCache(capture.FileMD5);
         await _md5Manager.DeleteByIdAsync(id);
         return Ok();
     }
@@ -158,6 +159,7 @@ public class ExperimentController : ControllerBase
         foreach (var file in files)
         {
             await DeletePhysicalFile(file);
+            DeleteCache(file.FileMD5);
             await _md5Manager.DeleteByIdAsync(file.Id);
             deleted++;
         }
@@ -185,6 +187,13 @@ public class ExperimentController : ControllerBase
                 catch (Exception ex) { _logger.LogWarning(ex, "Failed to notify Agent to delete {Path}", capture.FileFullPath); }
             }
         }
+    }
+
+    private static void DeleteCache(string? fileMd5)
+    {
+        if (string.IsNullOrEmpty(fileMd5)) return;
+        var cachePath = Path.Combine(AppContext.BaseDirectory, "cache", $"{fileMd5}.jpg");
+        try { if (System.IO.File.Exists(cachePath)) System.IO.File.Delete(cachePath); } catch { }
     }
 }
 

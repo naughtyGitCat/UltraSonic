@@ -571,6 +571,10 @@ function App() {
                       <TextInput placeholder="e.g. http://192.168.1.100:5000" value={newAgentIp} onChange={(e) => setNewAgentIp(e.target.value)} style={{ width: '250px' }} />
                       <Button onClick={handleAddAgent}>Add Node</Button>
                       <Button onClick={fetchAgents}>Refresh</Button>
+                      <Button onClick={() => {
+                        if (window.confirm('Clear image cache on Master and all Agents?'))
+                          fetch('/api/cache', { method: 'DELETE' }).then(r => r.json()).then(d => alert(`Cache cleared: ${d.masterCleared} files, ${d.agentsNotified} agents notified`));
+                      }}>Clear Cache</Button>
                     </div>
                   </fieldset>
                   <ScrollView style={{ height: '300px' }}>

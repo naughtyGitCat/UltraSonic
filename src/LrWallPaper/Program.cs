@@ -77,6 +77,37 @@ class Program
 
         app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.Now }));
 
+        var cacheDir = Path.Combine(AppContext.BaseDirectory, "cache");
+        Directory.CreateDirectory(cacheDir);
+
+        app.MapDelete("/api/cache", async (AgentManager agentManager) =>
+        {
+            // Clear Master cache
+            long cleared = 0;
+            if (Directory.Exists(cacheDir))
+            {
+                var files = Directory.GetFiles(cacheDir);
+                cleared = files.Length;
+                foreach (var f in files) try { System.IO.File.Delete(f); } catch { }
+            }
+            // Also clear all Agent caches
+            var agents = await agentManager.GetAllAgentsAsync();
+            var client = new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(5) };
+            foreach (var agent in agents)
+            {
+                try { await client.DeleteAsync($"{agent.Endpoint.TrimEnd('/')}/api/agent/cache"); } catch { }
+            }
+            return Results.Ok(new { masterCleared = cleared, agentsNotified = agents.Count });
+        });
+
+        app.MapGet("/api/cache/stats", () =>
+        {
+            if (!Directory.Exists(cacheDir)) return Results.Ok(new { files = 0, sizeBytes = 0L });
+            var dirInfo = new DirectoryInfo(cacheDir);
+            var fileInfos = dirInfo.GetFiles();
+            return Results.Ok(new { files = fileInfos.Length, sizeBytes = fileInfos.Sum(f => f.Length) });
+        });
+
         app.MapGet("/api/version", () =>
         {
             var asm = System.Reflection.Assembly.GetExecutingAssembly();
@@ -88,7 +119,7 @@ class Program
         // SPA fallback: any unmatched route returns index.html
         app.MapFallbackToFile("index.html");
 
-        app.MapGet("/api/image", async (string path, string? agentId, AgentManager agentManager) =>
+        app.MapGet("/api/image", async (string path, string? agentId, AgentManager agentManager, FileMD5Manager md5Manager) =>
         {
             if (string.IsNullOrEmpty(path)) return Results.NotFound();
 
@@ -115,9 +146,27 @@ class Program
                 if (!System.IO.File.Exists(path)) return Results.NotFound();
                 if (needsConvert.Contains(ext))
                 {
+                    // Try cache: lookup file_md5 from DB
+                    var entity = await md5Manager.FindByFullPathAsync(path);
+                    var cacheKey = entity?.FileMD5;
+                    if (!string.IsNullOrEmpty(cacheKey))
+                    {
+                        var cachePath = Path.Combine(cacheDir, $"{cacheKey}.jpg");
+                        if (System.IO.File.Exists(cachePath))
+                            return Results.File(cachePath, "image/jpeg", enableRangeProcessing: true);
+                    }
+
                     using var image = new MagickImage(path);
                     var ms = new MemoryStream();
                     image.Write(ms, MagickFormat.Jpeg);
+
+                    // Write to cache
+                    if (!string.IsNullOrEmpty(cacheKey))
+                    {
+                        var cachePath = Path.Combine(cacheDir, $"{cacheKey}.jpg");
+                        await System.IO.File.WriteAllBytesAsync(cachePath, ms.ToArray());
+                    }
+
                     ms.Position = 0;
                     return Results.File(ms, "image/jpeg");
                 }
