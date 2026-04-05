@@ -7,6 +7,8 @@ public class UltraSonicConfig
     public LightroomConfig Lightroom { get; set; } = new();
     public ArchivePathsConfig ArchivePaths { get; set; } = new();
     public RecognitionConfig Recognition { get; set; } = new();
+    public FaceRecognitionConfig FaceRecognition { get; set; } = new();
+    public BackupConfig Backup { get; set; } = new();
 }
 
 public class RecognitionConfig
@@ -47,4 +49,22 @@ public class ArchivePathsConfig
 {
     public string Current { get; set; } = "";
     public string History { get; set; } = "";
+}
+
+public class FaceRecognitionConfig
+{
+    public string Provider { get; set; } = "Claude";
+    public bool AutoDetect { get; set; } = false;
+    public double ConfidenceThreshold { get; set; } = 0.7;
+}
+
+public class BackupConfig
+{
+    public bool Enabled { get; set; } = false;
+    public string Provider { get; set; } = "115";
+    public string Cookie { get; set; } = "";
+    public string RemoteBasePath { get; set; } = "/UltraSonic";
+    public bool AutoBackup { get; set; } = false;
+    public int MaxConcurrentUploads { get; set; } = 2;
+    public int SyncIntervalMinutes { get; set; } = 60;
 }

@@ -139,5 +139,44 @@ public class AgentController : ControllerBase
         catch { return StatusCode(502); }
     }
 
+    /// <summary>
+    /// Proxy to get logs from a specific agent
+    /// </summary>
+    [HttpGet("{id}/logs")]
+    public async Task<IActionResult> GetAgentLogs(string id, [FromQuery] string? type, [FromQuery] int? lines)
+    {
+        if (id == "local")
+        {
+            // Return master logs directly
+            var logType = type ?? "all";
+            var maxLines = Math.Min(lines ?? 200, 2000);
+            var logDir = Path.Combine(AppContext.BaseDirectory, "logs");
+            var prefix = logType switch { "error" => "master-error-", _ => "master-" };
+
+            if (!Directory.Exists(logDir))
+                return Ok(new { lines = Array.Empty<string>(), file = "" });
+
+            var files = Directory.GetFiles(logDir, $"{prefix}*.txt").OrderByDescending(f => f).ToList();
+            if (files.Count == 0) return Ok(new { lines = Array.Empty<string>(), file = "" });
+
+            var allLines = System.IO.File.ReadAllLines(files[0]);
+            var result = allLines.Length > maxLines ? allLines[^maxLines..] : allLines;
+            return Ok(new { lines = result, file = Path.GetFileName(files[0]), totalFiles = files.Count, availableTypes = new[] { "all", "error" } });
+        }
+
+        var agents = await _agentManager.GetAllAgentsAsync();
+        var agent = agents.FirstOrDefault(a => a.Id == id);
+        if (agent == null) return NotFound();
+
+        var client = new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(5) };
+        try
+        {
+            var url = $"{agent.Endpoint.TrimEnd('/')}/api/agent/logs?type={type ?? "all"}&lines={lines ?? 200}";
+            var resp = await client.GetStringAsync(url);
+            return Content(resp, "application/json");
+        }
+        catch { return StatusCode(502); }
+    }
+
     private record VersionResponse(string Version);
 }

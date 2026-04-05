@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Serilog;
 using Serilog.Events;
+using Serilog.Expressions;
 using ImageMagick;
 using LrWallPaper.Agent.Services;
 
@@ -11,7 +12,31 @@ Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
     .Enrich.FromLogContext()
     .WriteTo.Console(outputTemplate: logTemplate)
-    .WriteTo.File("logs/agent-.txt", rollingInterval: RollingInterval.Day, outputTemplate: logTemplate)
+    // All logs: daily rolling, 50MB size limit, keep 30 days
+    .WriteTo.File("logs/agent-.txt",
+        rollingInterval: RollingInterval.Day,
+        fileSizeLimitBytes: 50 * 1024 * 1024,
+        rollOnFileSizeLimit: true,
+        retainedFileCountLimit: 30,
+        outputTemplate: logTemplate)
+    // Error/Fatal only: separate file for quick troubleshooting
+    .WriteTo.Logger(lc => lc
+        .Filter.ByIncludingOnly(e => e.Level >= LogEventLevel.Error)
+        .WriteTo.File("logs/agent-error-.txt",
+            rollingInterval: RollingInterval.Day,
+            fileSizeLimitBytes: 50 * 1024 * 1024,
+            rollOnFileSizeLimit: true,
+            retainedFileCountLimit: 60,
+            outputTemplate: logTemplate))
+    // Scan logs only: separate file for scan activity tracking
+    .WriteTo.Logger(lc => lc
+        .Filter.ByIncludingOnly("SourceContext like 'LrWallPaper.Agent.Services.ScanAndPushJob%'")
+        .WriteTo.File("logs/agent-scan-.txt",
+            rollingInterval: RollingInterval.Day,
+            fileSizeLimitBytes: 50 * 1024 * 1024,
+            rollOnFileSizeLimit: true,
+            retainedFileCountLimit: 30,
+            outputTemplate: logTemplate))
     .CreateLogger();
 
 var builder = WebApplication.CreateBuilder(args);
@@ -126,6 +151,44 @@ app.MapGet("/api/agent/version", () =>
     var infoVer = asm.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
         .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion ?? "unknown";
     return Results.Ok(new { version = infoVer });
+});
+
+// Log viewing API
+app.MapGet("/api/agent/logs", (string? type, int? lines) =>
+{
+    var logType = type ?? "all"; // all, error, scan
+    var maxLines = Math.Min(lines ?? 200, 2000);
+
+    var logDir = Path.Combine(AppContext.BaseDirectory, "logs");
+    var prefix = logType switch
+    {
+        "error" => "agent-error-",
+        "scan" => "agent-scan-",
+        _ => "agent-"
+    };
+
+    if (!Directory.Exists(logDir))
+        return Results.Ok(new { lines = Array.Empty<string>(), file = "" });
+
+    var files = Directory.GetFiles(logDir, $"{prefix}*.txt")
+        .OrderByDescending(f => f)
+        .ToList();
+    if (files.Count == 0)
+        return Results.Ok(new { lines = Array.Empty<string>(), file = "" });
+
+    var latestFile = files[0];
+    var allLines = File.ReadAllLines(latestFile);
+    var result = allLines.Length > maxLines
+        ? allLines[^maxLines..]
+        : allLines;
+
+    return Results.Ok(new
+    {
+        lines = result,
+        file = Path.GetFileName(latestFile),
+        totalFiles = files.Count,
+        availableTypes = new[] { "all", "error", "scan" }
+    });
 });
 
 // File delete endpoint for Master to request file deletion

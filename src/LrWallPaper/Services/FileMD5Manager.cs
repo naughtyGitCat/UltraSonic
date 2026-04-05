@@ -110,6 +110,54 @@ namespace LrWallPaper.Services
             try { db.Execute("UPDATE file_info SET agent_id = 'local' WHERE agent_id IS NULL;"); } catch {}
             try { db.Execute("ALTER TABLE file_info ADD COLUMN latitude REAL NULL;"); } catch {}
             try { db.Execute("ALTER TABLE file_info ADD COLUMN longitude REAL NULL;"); } catch {}
+
+            // Face recognition tables
+            db.Execute("""
+                CREATE TABLE IF NOT EXISTS persons (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  name TEXT NOT NULL,
+                  avatar_file_id INTEGER NULL,
+                  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS face_detections (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  file_id INTEGER NOT NULL,
+                  person_id INTEGER NULL,
+                  region_x REAL NOT NULL,
+                  region_y REAL NOT NULL,
+                  region_w REAL NOT NULL,
+                  region_h REAL NOT NULL,
+                  confidence REAL NOT NULL DEFAULT 0,
+                  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  FOREIGN KEY (file_id) REFERENCES file_info(id) ON DELETE CASCADE,
+                  FOREIGN KEY (person_id) REFERENCES persons(id) ON DELETE SET NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_face_file ON face_detections(file_id);
+                CREATE INDEX IF NOT EXISTS idx_face_person ON face_detections(person_id);
+            """);
+
+            // Backup tracking table
+            db.Execute("""
+                CREATE TABLE IF NOT EXISTS backup_tasks (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  file_id INTEGER NOT NULL,
+                  provider TEXT NOT NULL DEFAULT '115',
+                  remote_path TEXT,
+                  remote_id TEXT,
+                  status TEXT NOT NULL DEFAULT 'pending',
+                  file_sha1 TEXT,
+                  last_attempt DATETIME,
+                  error_message TEXT,
+                  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  completed_at DATETIME,
+                  FOREIGN KEY (file_id) REFERENCES file_info(id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_backup_file ON backup_tasks(file_id);
+                CREATE INDEX IF NOT EXISTS idx_backup_status ON backup_tasks(status);
+            """);
         }
 
         public async Task SaveFileMD5Async(FileMD5Entity file) 

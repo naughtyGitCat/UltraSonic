@@ -2,6 +2,7 @@ using LrWallPaper.Services;
 using ModelContextProtocol.Server;
 using Serilog;
 using Serilog.Events;
+using Serilog.Expressions;
 using Microsoft.AspNetCore.Hosting;
 using ImageMagick;
 
@@ -18,7 +19,22 @@ class Program
             .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
             .Enrich.FromLogContext()
             .WriteTo.Console(outputTemplate: logTemplate)
-            .WriteTo.File("logs/master-.txt", rollingInterval: RollingInterval.Day, outputTemplate: logTemplate)
+            // All logs: daily rolling, 50MB size limit, keep 30 days
+            .WriteTo.File("logs/master-.txt",
+                rollingInterval: RollingInterval.Day,
+                fileSizeLimitBytes: 50 * 1024 * 1024,
+                rollOnFileSizeLimit: true,
+                retainedFileCountLimit: 30,
+                outputTemplate: logTemplate)
+            // Error/Fatal only: separate file for quick troubleshooting
+            .WriteTo.Logger(lc => lc
+                .Filter.ByIncludingOnly(e => e.Level >= LogEventLevel.Error)
+                .WriteTo.File("logs/master-error-.txt",
+                    rollingInterval: RollingInterval.Day,
+                    fileSizeLimitBytes: 50 * 1024 * 1024,
+                    rollOnFileSizeLimit: true,
+                    retainedFileCountLimit: 60,
+                    outputTemplate: logTemplate))
             .CreateLogger();
         var builder = WebApplication.CreateBuilder(args);
         
@@ -31,6 +47,9 @@ class Program
         builder.Services.AddSingleton<FileMD5Manager>();
         builder.Services.AddSingleton<AgentManager>();
         builder.Services.AddSingleton<TagManager>();
+        builder.Services.AddSingleton<FaceManager>();
+        builder.Services.AddSingleton<BackupManager>();
+        builder.Services.AddSingleton<Cloud115Service>();
         // builder.Services.AddHostedService<ExperimentJob>();
         // builder.Services.AddHostedService<SyncRemovableJob>();
         // builder.Services.AddHostedService<PictureMD5Job>(); // moved to Agent
@@ -40,6 +59,7 @@ class Program
         builder.Services.AddSingleton<MasterReplicationService>();
         builder.Services.AddHostedService<MasterReplicationJob>();
         builder.Services.AddHostedService<FileRenameJob>();
+        builder.Services.AddHostedService<CloudBackupJob>();
         builder.Services.AddSingleton<MasterTrayIconManager>();
         
         builder.Services.AddControllers();
@@ -118,6 +138,63 @@ class Program
             var infoVer = asm.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
                 .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion ?? "unknown";
             return Results.Ok(new { version = infoVer });
+        });
+
+        // Log viewing API
+        app.MapGet("/api/logs", (string? type, int? lines, string? agentId, AgentManager agentManager) =>
+        {
+            var logType = type ?? "all"; // all, error, scan
+            var maxLines = Math.Min(lines ?? 200, 2000);
+
+            var logDir = Path.Combine(AppContext.BaseDirectory, "logs");
+            var prefix = logType switch
+            {
+                "error" => "master-error-",
+                _ => "master-"
+            };
+
+            if (!Directory.Exists(logDir))
+                return Results.Ok(new { lines = Array.Empty<string>(), file = "" });
+
+            // Find latest matching log file
+            var files = Directory.GetFiles(logDir, $"{prefix}*.txt")
+                .OrderByDescending(f => f)
+                .ToList();
+            if (files.Count == 0)
+                return Results.Ok(new { lines = Array.Empty<string>(), file = "" });
+
+            var latestFile = files[0];
+            // Read last N lines efficiently
+            var allLines = File.ReadAllLines(latestFile);
+            var result = allLines.Length > maxLines
+                ? allLines[^maxLines..]
+                : allLines;
+
+            return Results.Ok(new
+            {
+                lines = result,
+                file = Path.GetFileName(latestFile),
+                totalFiles = files.Count,
+                availableTypes = new[] { "all", "error" }
+            });
+        });
+
+        app.MapGet("/api/logs/files", () =>
+        {
+            var logDir = Path.Combine(AppContext.BaseDirectory, "logs");
+            if (!Directory.Exists(logDir))
+                return Results.Ok(Array.Empty<object>());
+
+            var files = Directory.GetFiles(logDir, "*.txt")
+                .Select(f => new
+                {
+                    name = Path.GetFileName(f),
+                    size = new FileInfo(f).Length,
+                    lastModified = new FileInfo(f).LastWriteTime
+                })
+                .OrderByDescending(f => f.lastModified)
+                .ToList();
+            return Results.Ok(files);
         });
 
         // SPA fallback: any unmatched route returns index.html
