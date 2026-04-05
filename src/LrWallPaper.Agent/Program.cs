@@ -41,8 +41,12 @@ if (app.Environment.IsDevelopment())
 app.UseAuthorization();
 app.MapControllers();
 
-// Cache directory
-var agentCacheDir = Path.Combine(AppContext.BaseDirectory, "cache");
+// Cache directory: configured > first scan path /cache > app base /cache
+var configuredAgentCache = builder.Configuration["Agent:CacheDirectory"] ?? "";
+var firstScanPath = builder.Configuration.GetSection("Agent:ScanPaths").Get<string[]>()?.FirstOrDefault();
+var agentCacheDir = !string.IsNullOrEmpty(configuredAgentCache) ? configuredAgentCache
+    : !string.IsNullOrEmpty(firstScanPath) ? Path.Combine(firstScanPath, "cache")
+    : Path.Combine(AppContext.BaseDirectory, "cache");
 Directory.CreateDirectory(agentCacheDir);
 
 string PathCacheKey(string filePath)

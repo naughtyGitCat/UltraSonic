@@ -77,7 +77,10 @@ class Program
 
         app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.Now }));
 
-        var cacheDir = Path.Combine(AppContext.BaseDirectory, "cache");
+        var configuredCacheDir = app.Configuration["UltraSonic:CacheDirectory"] ?? "";
+        var cacheDir = string.IsNullOrEmpty(configuredCacheDir)
+            ? Path.Combine(AppContext.BaseDirectory, "cache")
+            : configuredCacheDir;
         Directory.CreateDirectory(cacheDir);
 
         app.MapDelete("/api/cache", async (AgentManager agentManager) =>
