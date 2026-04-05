@@ -40,10 +40,11 @@ public class ExperimentController : ControllerBase
         [FromQuery] string? cameraMaker = null, [FromQuery] string? cameraModel = null,
         [FromQuery] string? fileType = null, [FromQuery] string? agentId = null,
         [FromQuery] DateTime? dateFrom = null, [FromQuery] DateTime? dateTo = null,
-        [FromQuery] bool? hasGps = null, [FromQuery] string? mediaType = null)
+        [FromQuery] bool? hasGps = null, [FromQuery] string? mediaType = null,
+        [FromQuery] long? tagId = null)
     {
         return await _md5Manager.GetFilteredPagedCapturesAsync(
-            page, pageSize, cameraMaker, cameraModel, fileType, agentId, dateFrom, dateTo, hasGps, mediaType);
+            page, pageSize, cameraMaker, cameraModel, fileType, agentId, dateFrom, dateTo, hasGps, mediaType, tagId);
     }
 
     [HttpGet("detail/{id:long}")]

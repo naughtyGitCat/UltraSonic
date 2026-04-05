@@ -89,6 +89,20 @@ namespace LrWallPaper.Services
                   name TEXT NOT NULL,
                   endpoint TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS tags (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  name TEXT NOT NULL UNIQUE,
+                  category TEXT NOT NULL DEFAULT ''
+                );
+
+                CREATE TABLE IF NOT EXISTS file_tags (
+                  file_id INTEGER NOT NULL,
+                  tag_id INTEGER NOT NULL,
+                  PRIMARY KEY (file_id, tag_id),
+                  FOREIGN KEY (file_id) REFERENCES file_info(id) ON DELETE CASCADE,
+                  FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+                );
                 """;
             db.Execute(sql);
 
@@ -308,7 +322,8 @@ namespace LrWallPaper.Services
             string? cameraMaker, string? cameraModel,
             string? fileType, string? agentId,
             DateTime? dateFrom, DateTime? dateTo,
-            bool? hasGps, string? mediaType = null)
+            bool? hasGps, string? mediaType = null,
+            long? tagId = null)
         {
             using var db = OpenDb();
             var conditions = new List<string>();
@@ -322,6 +337,7 @@ namespace LrWallPaper.Services
             if (dateFrom.HasValue) { conditions.Add($"capture_time >= @{idx}"); parameters.Add(dateFrom.Value.ToString("yyyy-MM-dd 00:00:00")); idx++; }
             if (dateTo.HasValue) { conditions.Add($"capture_time <= @{idx}"); parameters.Add(dateTo.Value.ToString("yyyy-MM-dd 23:59:59")); idx++; }
             if (hasGps == true) { conditions.Add("latitude IS NOT NULL AND longitude IS NOT NULL"); }
+            if (tagId.HasValue) { conditions.Add($"id IN (SELECT file_id FROM file_tags WHERE tag_id = @{idx})"); parameters.Add(tagId.Value); idx++; }
 
             if (mediaType == "photo")
             {

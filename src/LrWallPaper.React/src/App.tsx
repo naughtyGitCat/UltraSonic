@@ -57,6 +57,12 @@ interface FilterOptions {
   agentIds: string[];
 }
 
+interface Tag {
+  id: number;
+  name: string;
+  category: string;
+}
+
 interface ScanStatus {
   isScanning?: boolean;
   currentFile?: string;
@@ -103,9 +109,10 @@ const dateInputStyle: React.CSSProperties = {
   fontSize: '11px', backgroundColor: '#fff', height: '22px'
 };
 
-function DetailModal({ capture, captures, index, onClose, onNavigate, onDelete }: {
+function DetailModal({ capture, captures, index, onClose, onNavigate, onDelete, allTags, onTagsChanged }: {
   capture: Capture; captures: Capture[]; index: number;
   onClose: () => void; onNavigate: (i: number) => void; onDelete: (id: number) => void;
+  allTags: Tag[]; onTagsChanged: () => void;
 }) {
   const ext = getExt(capture.fileName);
   const isVideo = VIDEO_EXTS.includes(ext);
@@ -113,11 +120,17 @@ function DetailModal({ capture, captures, index, onClose, onNavigate, onDelete }
   const absolutePath = capture.fileFullPath || `${capture.filePath}\\${capture.fileName}`;
   const imgSrc = `/api/image?path=${encodeURIComponent(absolutePath)}&agentId=${capture.agentId || 'local'}`;
 
+  // Tags for this file
+  const [fileTags, setFileTags] = useState<Tag[]>([]);
+  const [newTagName, setNewTagName] = useState('');
+  const fetchFileTags = () => { fetch(`/api/tag/file/${capture.id}`).then(r => r.json()).then(setFileTags).catch(() => {}); };
+
   // Live Photo: check for companion MOV
   const [livePhotoMov, setLivePhotoMov] = useState<Capture | null>(null);
   const [showLivePhoto, setShowLivePhoto] = useState(false);
 
   useEffect(() => {
+    fetchFileTags();
     setLivePhotoMov(null);
     setShowLivePhoto(false);
     if (isPhoto && capture.id && ['.heic', '.jpg', '.jpeg'].includes(ext)) {
@@ -197,6 +210,40 @@ function DetailModal({ capture, captures, index, onClose, onNavigate, onDelete }
                   ))}
                 </tbody>
               </table>
+            </GroupBox>
+            <GroupBox label="Tags" style={{ marginTop: '6px' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px', marginBottom: '4px' }}>
+                {fileTags.map(t => (
+                  <span key={t.id} style={{ fontSize: '10px', backgroundColor: '#000080', color: '#fff', padding: '1px 6px', borderRadius: '2px', cursor: 'pointer' }}
+                    onClick={() => { fetch(`/api/tag/file/${capture.id}/${t.id}`, { method: 'DELETE' }).then(fetchFileTags); }}
+                    title="Click to remove">{t.name} x</span>
+                ))}
+                {fileTags.length === 0 && <span style={{ fontSize: '10px', color: '#888' }}>No tags</span>}
+              </div>
+              <div style={{ display: 'flex', gap: '2px' }}>
+                <select style={{ flex: 1, fontSize: '10px', border: '2px inset #dfdfdf', fontFamily: 'ms_sans_serif' }}
+                  onChange={e => {
+                    if (e.target.value) fetch(`/api/tag/file/${capture.id}/${e.target.value}`, { method: 'POST' }).then(fetchFileTags);
+                    e.target.value = '';
+                  }}>
+                  <option value="">+ Add tag...</option>
+                  {allTags.filter(t => !fileTags.some(ft => ft.id === t.id)).map(t => (
+                    <option key={t.id} value={t.id}>{t.category ? t.category + '/' : ''}{t.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: 'flex', gap: '2px', marginTop: '4px' }}>
+                <input type="text" placeholder="New tag" value={newTagName}
+                  onChange={e => setNewTagName(e.target.value)}
+                  style={{ flex: 1, fontSize: '10px', border: '2px inset #dfdfdf', padding: '1px 3px', fontFamily: 'ms_sans_serif' }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && newTagName.trim()) {
+                      fetch('/api/tag', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newTagName.trim(), category: '' }) })
+                        .then(r => r.json())
+                        .then((tag: Tag) => { fetch(`/api/tag/file/${capture.id}/${tag.id}`, { method: 'POST' }).then(() => { fetchFileTags(); onTagsChanged(); setNewTagName(''); }); });
+                    }
+                  }} />
+              </div>
             </GroupBox>
             <Button style={{ marginTop: '8px', width: '100%', color: '#ff0000' }}
               onClick={() => {
@@ -323,6 +370,8 @@ function App() {
   const [dateTo, setDateTo] = useState('');
   const [hasGps, setHasGps] = useState(false);
   const [mediaType, setMediaType] = useState('');
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+  const [selectedTagId, setSelectedTagId] = useState<number | ''>('');
 
   // Folder State
   const [folders, setFolders] = useState<FolderSummaryI[]>([]);
@@ -395,11 +444,15 @@ function App() {
     [loading, hasMore]
   );
 
-  // Fetch filter options on mount
+  // Fetch filter options and tags on mount
   useEffect(() => {
     fetch('/api/experiment/filters')
       .then(r => r.json())
       .then(setFilterOptions)
+      .catch(console.error);
+    fetch('/api/tag')
+      .then(r => r.json())
+      .then(setAllTags)
       .catch(console.error);
   }, []);
 
@@ -409,7 +462,7 @@ function App() {
     setCaptures([]);
     setPage(1);
     setHasMore(true);
-  }, [selectedMaker, selectedModel, selectedFileType, selectedAgent, dateFrom, dateTo, hasGps, mediaType]);
+  }, [selectedMaker, selectedModel, selectedFileType, selectedAgent, dateFrom, dateTo, hasGps, mediaType, selectedTagId]);
 
   // Fetch data
   useEffect(() => {
@@ -424,6 +477,7 @@ function App() {
     if (dateTo) params.set('dateTo', dateTo);
     if (hasGps) params.set('hasGps', 'true');
     if (mediaType) params.set('mediaType', mediaType);
+    if (selectedTagId) params.set('tagId', String(selectedTagId));
 
     const ver = filterVersion.current;
     fetch(`/api/experiment/gallery?${params}`)
@@ -442,7 +496,7 @@ function App() {
         setLoading(false);
       })
       .catch(err => { console.error('Error fetching:', err); setLoading(false); });
-  }, [page, selectedMaker, selectedModel, selectedFileType, selectedAgent, dateFrom, dateTo, hasGps, mediaType]);
+  }, [page, selectedMaker, selectedModel, selectedFileType, selectedAgent, dateFrom, dateTo, hasGps, mediaType, selectedTagId]);
 
   useEffect(() => { if (activeTab === 1) fetchAgents(); }, [activeTab]);
 
@@ -467,7 +521,7 @@ function App() {
 
   const clearFilters = () => {
     setSelectedMaker(''); setSelectedModel(''); setSelectedFileType('');
-    setSelectedAgent(''); setDateFrom(''); setDateTo(''); setHasGps(false); setMediaType('');
+    setSelectedAgent(''); setDateFrom(''); setDateTo(''); setHasGps(false); setMediaType(''); setSelectedTagId('');
   };
 
   // Folder functions
@@ -544,6 +598,13 @@ function App() {
                       <Button size="sm" active={mediaType === 'photo'} onClick={() => setMediaType('photo')}>Photos</Button>
                       <Button size="sm" active={mediaType === 'video'} onClick={() => setMediaType('video')}>Videos</Button>
                       <span style={{ borderLeft: '1px solid #808080', height: '20px', margin: '0 2px' }} />
+                      {allTags.length > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <label style={{ fontSize: '11px' }}>Tag:</label>
+                          <Select options={[{ label: 'All', value: '' as string | number }, ...allTags.map(t => ({ label: `${t.category ? t.category + '/' : ''}${t.name}`, value: t.id }))]}
+                            value={selectedTagId} onChange={(e) => setSelectedTagId(e.value as number | '')} width={140} menuMaxHeight={200} />
+                        </div>
+                      )}
                       <Button size="sm" onClick={clearFilters}>Clear</Button>
                     </div>
                   </GroupBox>
@@ -793,6 +854,8 @@ function App() {
                 })
                 .catch(err => { alert('Failed to delete: ' + err.message); });
             }}
+            allTags={allTags}
+            onTagsChanged={() => fetch('/api/tag').then(r => r.json()).then(setAllTags).catch(() => {})}
           />
         )}
       </ThemeProvider>

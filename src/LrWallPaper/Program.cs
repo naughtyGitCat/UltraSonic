@@ -30,6 +30,7 @@ class Program
         // builder.Services.AddHostedService<BusinessJob>();
         builder.Services.AddSingleton<FileMD5Manager>();
         builder.Services.AddSingleton<AgentManager>();
+        builder.Services.AddSingleton<TagManager>();
         // builder.Services.AddHostedService<ExperimentJob>();
         // builder.Services.AddHostedService<SyncRemovableJob>();
         // builder.Services.AddHostedService<PictureMD5Job>(); // moved to Agent
