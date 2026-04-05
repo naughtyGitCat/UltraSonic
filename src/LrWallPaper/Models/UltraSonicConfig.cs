@@ -6,6 +6,24 @@ public class UltraSonicConfig
     public AppleImportConfig AppleImport { get; set; } = new();
     public LightroomConfig Lightroom { get; set; } = new();
     public ArchivePathsConfig ArchivePaths { get; set; } = new();
+    public RecognitionConfig Recognition { get; set; } = new();
+}
+
+public class RecognitionConfig
+{
+    public string Provider { get; set; } = "Claude";
+    public Dictionary<string, string> ApiKeys { get; set; } = new()
+    {
+        ["Claude"] = "",
+        ["OpenAI"] = "",
+        ["Gemini"] = ""
+    };
+    public Dictionary<string, string> Models { get; set; } = new()
+    {
+        ["Claude"] = "claude-sonnet-4-20250514",
+        ["OpenAI"] = "gpt-4o",
+        ["Gemini"] = "gemini-2.0-flash"
+    };
 }
 
 public class LocalScanConfig

@@ -245,7 +245,19 @@ function DetailModal({ capture, captures, index, onClose, onNavigate, onDelete, 
                   }} />
               </div>
             </GroupBox>
-            <Button style={{ marginTop: '8px', width: '100%', color: '#ff0000' }}
+            <Button style={{ marginTop: '6px', width: '100%' }}
+              onClick={() => {
+                fetch('/api/recognition/providers').then(r => r.json()).then((data: {defaultProvider:string; providers: Array<{name:string;configured:boolean}>}) => {
+                  const configured = data.providers.filter(p => p.configured);
+                  if (configured.length === 0) { alert('No API keys configured. Go to Node Config > Image Recognition to set up.'); return; }
+                  const provider = configured.find(p => p.name === data.defaultProvider)?.name || configured[0].name;
+                  fetch('/api/recognition/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fileIds: [capture.id], provider }) })
+                    .then(r => r.json()).then(() => { fetchFileTags(); onTagsChanged(); alert('Recognition complete'); })
+                    .catch(err => alert('Recognition failed: ' + err.message));
+                });
+              }}>AI Recognize</Button>
+            <Button style={{ marginTop: '4px', width: '100%', color: '#ff0000' }}
               onClick={() => {
                 if (window.confirm(`Delete "${capture.fileName}"? This will remove the file from disk.`)) {
                   onDelete(capture.id);
@@ -744,6 +756,35 @@ function App() {
                       </GroupBox>
                     );
                   })()}
+
+                  {/* Image Recognition Settings */}
+                  {editingNodeId === 'local' && (
+                    <GroupBox label="Image Recognition" style={{ marginTop: '10px' }}>
+                      <div style={{ fontSize: '11px' }}>
+                        {['Claude', 'OpenAI', 'Gemini'].map(p => (
+                          <div key={p} style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '4px' }}>
+                            <b style={{ width: '50px' }}>{p}:</b>
+                            <input type="password" placeholder="API Key"
+                              style={{ flex: 1, border: '2px inset #dfdfdf', padding: '2px 4px', fontSize: '11px', fontFamily: 'ms_sans_serif' }}
+                              defaultValue={(() => { try { return (nodeConfig as any)?.UltraSonic?.Recognition?.ApiKeys?.[p] || ''; } catch { return ''; } })()}
+                              onChange={e => {
+                                if (!nodeConfig) return;
+                                const c = JSON.parse(JSON.stringify(nodeConfig));
+                                if (!c.UltraSonic) c.UltraSonic = {};
+                                if (!c.UltraSonic.Recognition) c.UltraSonic.Recognition = {};
+                                if (!c.UltraSonic.Recognition.ApiKeys) c.UltraSonic.Recognition.ApiKeys = {};
+                                c.UltraSonic.Recognition.ApiKeys[p] = e.target.value;
+                                setNodeConfig(c);
+                              }} />
+                            <Button size="sm" onClick={() => {
+                              fetch('/api/recognition/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: p }) })
+                                .then(r => r.json()).then((d: {ok:boolean;message:string}) => alert(`${p}: ${d.ok ? 'OK' : 'Failed'} - ${d.message}`));
+                            }}>Test</Button>
+                          </div>
+                        ))}
+                      </div>
+                    </GroupBox>
+                  )}
 
                   {/* Config Editor Panel */}
                   {editingNodeId && nodeConfig && (
