@@ -57,6 +57,10 @@ class Program
         // builder.Services.AddHostedService<SyncGenericDeviceJob>(); // moved to Agent
         builder.Services.AddHttpClient("ClusterClient");
         builder.Services.AddSingleton<MasterReplicationService>();
+        builder.Services.Configure<HostOptions>(opts =>
+        {
+            opts.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
+        });
         builder.Services.AddHostedService<MasterReplicationJob>();
         builder.Services.AddHostedService<FileRenameJob>();
         builder.Services.AddHostedService<CloudBackupJob>();
