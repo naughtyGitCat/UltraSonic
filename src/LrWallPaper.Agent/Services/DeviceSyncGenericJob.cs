@@ -45,6 +45,11 @@ public class DeviceSyncGenericJob : BackgroundService
                 await ImportFromRemovableDrivesAsync(masterEndpoint, agentId, archiveDir, transferMode, stoppingToken);
                 _logger.LogInformation("Generic device scan completed.");
             }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                _logger.LogInformation("Generic device sync stopped gracefully at file boundary.");
+                break;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Generic device sync failed");
@@ -95,11 +100,13 @@ public class DeviceSyncGenericJob : BackgroundService
             }
             finally
             {
-                // Persist whatever was already archived before stopping
+                // Persist whatever was already archived before stopping.
+                // Use a non-cancellable token so a graceful shutdown still
+                // flushes bookkeeping for files already moved to disk.
                 if (batch.Count > 0)
-                    await PushBatchAsync(masterEndpoint, batch, ct);
+                    await PushBatchAsync(masterEndpoint, batch, CancellationToken.None);
                 if (archiveRecords.Count > 0)
-                    await PushArchiveHistoryAsync(masterEndpoint, archiveRecords, ct);
+                    await PushArchiveHistoryAsync(masterEndpoint, archiveRecords, CancellationToken.None);
 
                 _state.IsArchiving = false;
                 _state.ArchiveCurrentFile = null;
@@ -117,7 +124,10 @@ public class DeviceSyncGenericJob : BackgroundService
     private async Task ProcessDirectoryAsync(string dir, string masterEndpoint, string agentId,
         string archiveDir, string transferMode, string deviceName, List<object> batch, List<object> archiveRecords, CancellationToken ct)
     {
-        if (ct.IsCancellationRequested) return;
+        // Safe boundary: stop the whole run here if a graceful shutdown was
+        // requested. Any previous file's File.Move already completed (it is
+        // synchronous and the token is only observed between files).
+        ct.ThrowIfCancellationRequested();
 
         string[] files = [];
         try { files = Directory.GetFiles(dir); }
@@ -125,6 +135,7 @@ public class DeviceSyncGenericJob : BackgroundService
 
         foreach (var file in files)
         {
+            ct.ThrowIfCancellationRequested();
             await ProcessFileAsync(file, masterEndpoint, agentId, archiveDir, transferMode, deviceName, batch, archiveRecords, ct);
             if (batch.Count >= 50)
             {

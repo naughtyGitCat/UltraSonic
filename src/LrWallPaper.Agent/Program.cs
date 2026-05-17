@@ -50,6 +50,9 @@ builder.Services.AddSingleton<TrayIconManager>();
 builder.Services.Configure<HostOptions>(opts =>
 {
     opts.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
+    // Allow an in-flight large-file move to finish on graceful shutdown
+    // instead of being force-terminated mid-copy (data-loss in move mode).
+    opts.ShutdownTimeout = TimeSpan.FromMinutes(10);
 });
 builder.Services.AddHostedService<ScanAndPushJob>();
 builder.Services.AddHostedService<DeviceSyncAppleJob>();
@@ -246,6 +249,14 @@ app.MapPost("/api/agent/rescan", (AgentState agentState) =>
 {
     agentState.TriggerRescan();
     return Results.Ok(new { message = "Rescan triggered" });
+});
+
+// Graceful shutdown: cancels the BackgroundService stopping token, letting
+// any in-flight file move finish at a safe boundary before the host exits.
+app.MapPost("/api/agent/shutdown", (IHostApplicationLifetime life) =>
+{
+    _ = Task.Run(async () => { await Task.Delay(400); life.StopApplication(); });
+    return Results.Ok(new { message = "Graceful shutdown initiated" });
 });
 
 // Move file on agent's local disk
