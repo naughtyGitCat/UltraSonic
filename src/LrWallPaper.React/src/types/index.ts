@@ -2,4 +2,4 @@ export type { Capture, FilterOptions, Tag, FolderSummary } from './gallery';
 export type { Agent, ScanStatus } from './agent';
 export type { BackupStats, BackupTask } from './backup';
 export type { FaceInfo, Person } from './face';
-export type { ArchiveRecord, ArchiveStats, ArchiveProgress } from './archive';
+export type { ArchiveRecord, ArchiveStats, ArchiveProgress, ArchiveAlert } from './archive';

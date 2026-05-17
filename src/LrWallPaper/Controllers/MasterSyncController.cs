@@ -95,6 +95,7 @@ public class MasterSyncController : ControllerBase
         var agents = await _agentManager.GetAllAgentsAsync();
         using var client = new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(3) };
         var active = new List<object>();
+        var alerts = new List<object>();
         foreach (var a in agents)
         {
             try
@@ -115,10 +116,21 @@ public class MasterSyncController : ControllerBase
                         startedAt = root.TryGetProperty("startedAt", out var s) && s.ValueKind != System.Text.Json.JsonValueKind.Null ? s.GetDateTime() : (DateTime?)null
                     });
                 }
+                else if (root.TryGetProperty("lastError", out var le) && le.ValueKind == System.Text.Json.JsonValueKind.String
+                         && !string.IsNullOrEmpty(le.GetString()))
+                {
+                    alerts.Add(new
+                    {
+                        agentId = a.Id,
+                        agentName = a.Name,
+                        error = le.GetString(),
+                        endedAt = root.TryGetProperty("lastArchiveEnd", out var ea) && ea.ValueKind != System.Text.Json.JsonValueKind.Null ? ea.GetDateTime() : (DateTime?)null
+                    });
+                }
             }
             catch { /* agent unreachable / no archive endpoint */ }
         }
-        return Ok(new { active });
+        return Ok(new { active, alerts });
     }
 
     [HttpGet("archive-history/stats")]

@@ -79,19 +79,28 @@ public class DeviceSyncGenericJob : BackgroundService
             _state.ArchivePhase = "scanning";
             _state.ArchiveProcessed = 0;
             _state.ArchiveStartedAt = DateTime.Now;
+            _state.ArchiveLastError = null;
             _state.NotifyStateChanged();
 
+            var aborted = false;
             try
             {
                 await ProcessDirectoryAsync(dcimPath, masterEndpoint, agentId, archiveDir, transferMode, deviceName, batch, archiveRecords, ct);
-
+            }
+            catch (InsufficientArchiveSpaceException ex)
+            {
+                aborted = true;
+                _state.ArchiveLastError = ex.Message;
+                _logger.LogError("Archive aborted — {Message}", ex.Message);
+            }
+            finally
+            {
+                // Persist whatever was already archived before stopping
                 if (batch.Count > 0)
                     await PushBatchAsync(masterEndpoint, batch, ct);
                 if (archiveRecords.Count > 0)
                     await PushArchiveHistoryAsync(masterEndpoint, archiveRecords, ct);
-            }
-            finally
-            {
+
                 _state.IsArchiving = false;
                 _state.ArchiveCurrentFile = null;
                 _state.ArchivePhase = null;
@@ -99,6 +108,9 @@ public class DeviceSyncGenericJob : BackgroundService
                 _state.LastArchiveCount = archiveRecords.Count;
                 _state.NotifyStateChanged();
             }
+
+            // Disk full: remaining drives target the same volume — stop entirely.
+            if (aborted) return;
         }
     }
 
@@ -181,6 +193,16 @@ public class DeviceSyncGenericJob : BackgroundService
                     $"{Path.GetFileNameWithoutExtension(filename)}_{DateTime.Now.Ticks}{ext}");
             }
 
+            // Guard: never start a write that the target volume can't hold.
+            // Disk-full is a hard stop — abort the whole run via exception.
+            var targetRoot = Path.GetPathRoot(Path.GetFullPath(targetFile));
+            if (!string.IsNullOrEmpty(targetRoot))
+            {
+                var free = new DriveInfo(targetRoot).AvailableFreeSpace;
+                if (free < size)
+                    throw new InsufficientArchiveSpaceException(targetFile, size, free);
+            }
+
             _logger.LogInformation("Importing ({Mode}) {Source} → {Target}", transferMode, sourceFile, targetFile);
             _state.ArchivePhase = "moving";
             _state.NotifyStateChanged();
@@ -221,6 +243,10 @@ public class DeviceSyncGenericJob : BackgroundService
                 CaptureTime = captureTime,
                 ArchivedAt = DateTime.Now
             });
+        }
+        catch (InsufficientArchiveSpaceException)
+        {
+            throw; // hard stop — let it unwind to abort the whole run
         }
         catch (Exception ex)
         {
@@ -289,4 +315,16 @@ public class DeviceSyncGenericJob : BackgroundService
     }
 
     private record FileExistsResponse(bool Exists);
+}
+
+/// <summary>
+/// Thrown when the archive target volume cannot fit the next file.
+/// Aborts the whole archive run — remaining files target the same disk.
+/// </summary>
+public sealed class InsufficientArchiveSpaceException(string file, long need, long free)
+    : Exception($"Insufficient space to archive '{Path.GetFileName(file)}': " +
+                $"need {need / 1024 / 1024} MB, target free {free / 1024 / 1024} MB")
+{
+    public long Need { get; } = need;
+    public long Free { get; } = free;
 }

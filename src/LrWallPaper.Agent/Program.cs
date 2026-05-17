@@ -158,7 +158,8 @@ app.MapGet("/api/agent/archive-status", (AgentState agentState) => Results.Ok(ne
     processed = agentState.ArchiveProcessed,
     startedAt = agentState.ArchiveStartedAt,
     lastArchiveEnd = agentState.LastArchiveEnd,
-    lastArchiveCount = agentState.LastArchiveCount
+    lastArchiveCount = agentState.LastArchiveCount,
+    lastError = agentState.ArchiveLastError
 }));
 
 app.MapGet("/api/agent/version", () =>

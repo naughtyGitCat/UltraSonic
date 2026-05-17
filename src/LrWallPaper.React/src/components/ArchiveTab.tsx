@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import type { ArchiveRecord, ArchiveStats, ArchiveProgress } from '../types';
+import type { ArchiveRecord, ArchiveStats, ArchiveProgress, ArchiveAlert } from '../types';
 import { formatFileSize } from '../utils';
 import { Button, Card, Badge } from '../ui';
 
@@ -7,6 +7,7 @@ export default function ArchiveTab() {
   const [stats, setStats] = useState<ArchiveStats | null>(null);
   const [records, setRecords] = useState<ArchiveRecord[]>([]);
   const [progress, setProgress] = useState<ArchiveProgress[]>([]);
+  const [alerts, setAlerts] = useState<ArchiveAlert[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const pageSize = 50;
@@ -27,10 +28,11 @@ export default function ArchiveTab() {
     const poll = () => {
       fetch('/api/master/archive-progress')
         .then(r => r.json())
-        .then((d: { active: ArchiveProgress[] }) => {
+        .then((d: { active: ArchiveProgress[]; alerts?: ArchiveAlert[] }) => {
           if (!alive) return;
           const act = d.active || [];
           setProgress(act);
+          setAlerts(d.alerts || []);
           // refresh history/stats when an in-progress run just finished
           if (wasActive.current && act.length === 0) fetchData(1);
           wasActive.current = act.length > 0;
@@ -53,6 +55,23 @@ export default function ArchiveTab() {
 
   return (
     <div className="col scroll-y" style={{ flexGrow: 1, gap: 14 }}>
+      {alerts.length > 0 && (
+        <div className="card" style={{ borderColor: 'var(--danger)', background: 'var(--danger-soft)' }}>
+          <div className="row" style={{ gap: 8, marginBottom: 6 }}>
+            <strong style={{ color: 'var(--danger)' }}>⚠ Archive stopped</strong>
+          </div>
+          <div className="col" style={{ gap: 6 }}>
+            {alerts.map(a => (
+              <div key={a.agentId} className="row wrap" style={{ gap: 12, fontSize: 12 }}>
+                <span className="badge badge-danger">{a.agentName}</span>
+                <span>{a.error}</span>
+                {a.endedAt && <span className="faint">{new Date(a.endedAt).toLocaleString()}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {progress.length > 0 && (
         <div className="card" style={{ borderColor: 'var(--accent-border)', background: 'var(--accent-soft)' }}>
           <div className="row" style={{ gap: 8, marginBottom: 10 }}>

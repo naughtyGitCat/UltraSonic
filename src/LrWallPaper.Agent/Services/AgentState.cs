@@ -25,6 +25,7 @@ public class AgentState
     public DateTime? ArchiveStartedAt { get; set; }
     public DateTime? LastArchiveEnd { get; set; }
     public int LastArchiveCount { get; set; }
+    public string? ArchiveLastError { get; set; }
 
     private readonly ManualResetEventSlim _rescanSignal = new(false);
 

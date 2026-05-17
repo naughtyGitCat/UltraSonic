@@ -24,6 +24,13 @@ export interface ArchiveProgress {
   startedAt?: string;
 }
 
+export interface ArchiveAlert {
+  agentId: string;
+  agentName: string;
+  error: string;
+  endedAt?: string;
+}
+
 export interface ArchiveStats {
   total: number;
   totalSize: number;
