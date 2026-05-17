@@ -66,17 +66,21 @@ public class DeviceSyncGenericJob : BackgroundService
             var dcimPath = Path.Combine(drive.Name, "DCIM");
             if (!Directory.Exists(dcimPath)) continue;
 
-            _logger.LogInformation("Found removable device with DCIM at: {Path}", dcimPath);
+            var deviceName = drive.VolumeLabel ?? drive.Name.TrimEnd('\\');
+            _logger.LogInformation("Found removable device with DCIM at: {Path} (label: {Label})", dcimPath, deviceName);
             var batch = new List<object>();
-            await ProcessDirectoryAsync(dcimPath, masterEndpoint, agentId, archiveDir, transferMode, batch, ct);
+            var archiveRecords = new List<object>();
+            await ProcessDirectoryAsync(dcimPath, masterEndpoint, agentId, archiveDir, transferMode, deviceName, batch, archiveRecords, ct);
 
             if (batch.Count > 0)
                 await PushBatchAsync(masterEndpoint, batch, ct);
+            if (archiveRecords.Count > 0)
+                await PushArchiveHistoryAsync(masterEndpoint, archiveRecords, ct);
         }
     }
 
     private async Task ProcessDirectoryAsync(string dir, string masterEndpoint, string agentId,
-        string archiveDir, string transferMode, List<object> batch, CancellationToken ct)
+        string archiveDir, string transferMode, string deviceName, List<object> batch, List<object> archiveRecords, CancellationToken ct)
     {
         if (ct.IsCancellationRequested) return;
 
@@ -86,7 +90,7 @@ public class DeviceSyncGenericJob : BackgroundService
 
         foreach (var file in files)
         {
-            await ProcessFileAsync(file, masterEndpoint, agentId, archiveDir, transferMode, batch, ct);
+            await ProcessFileAsync(file, masterEndpoint, agentId, archiveDir, transferMode, deviceName, batch, archiveRecords, ct);
             if (batch.Count >= 50)
             {
                 await PushBatchAsync(masterEndpoint, batch, ct);
@@ -99,11 +103,11 @@ public class DeviceSyncGenericJob : BackgroundService
         catch { }
 
         foreach (var sub in subDirs)
-            await ProcessDirectoryAsync(sub, masterEndpoint, agentId, archiveDir, transferMode, batch, ct);
+            await ProcessDirectoryAsync(sub, masterEndpoint, agentId, archiveDir, transferMode, deviceName, batch, archiveRecords, ct);
     }
 
     private async Task ProcessFileAsync(string sourceFile, string masterEndpoint, string agentId,
-        string archiveDir, string transferMode, List<object> batch, CancellationToken ct)
+        string archiveDir, string transferMode, string deviceName, List<object> batch, List<object> archiveRecords, CancellationToken ct)
     {
         var filename = Path.GetFileName(sourceFile);
         var ext = Path.GetExtension(sourceFile);
@@ -167,6 +171,22 @@ public class DeviceSyncGenericJob : BackgroundService
                 FileMD5 = md5,
                 CaptureTime = captureTime
             });
+
+            archiveRecords.Add(new
+            {
+                SourcePath = sourceFile,
+                TargetPath = targetFile,
+                FileName = Path.GetFileName(targetFile),
+                FileSize = size,
+                FileMD5 = md5,
+                TransferMode = transferMode,
+                DeviceName = deviceName,
+                AgentId = agentId,
+                AgentName = Environment.MachineName,
+                CameraModel = exif.CameraModel ?? "",
+                CaptureTime = captureTime,
+                ArchivedAt = DateTime.Now
+            });
         }
         catch (Exception ex)
         {
@@ -200,6 +220,21 @@ public class DeviceSyncGenericJob : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to push generic import batch to Master");
+        }
+    }
+
+    private async Task PushArchiveHistoryAsync(string masterEndpoint, List<object> records, CancellationToken ct)
+    {
+        var url = $"{masterEndpoint.TrimEnd('/')}/api/master/archive-history";
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync(url, records, ct);
+            _logger.LogInformation("Pushed {Count} archive history records — HTTP {Status}",
+                records.Count, (int)response.StatusCode);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to push archive history to Master");
         }
     }
 

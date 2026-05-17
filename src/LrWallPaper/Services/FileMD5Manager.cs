@@ -51,7 +51,7 @@ namespace LrWallPaper.Services
         private readonly ILogger<FileMD5Manager> _logger;
         private readonly string _connectionString;
 
-        private IDatabase OpenDb() => new Database(_connectionString, DatabaseType.SQLite, SqliteFactory.Instance);
+        public IDatabase OpenDb() => new Database(_connectionString, DatabaseType.SQLite, SqliteFactory.Instance);
 
         public FileMD5Manager(ILogger<FileMD5Manager> logger)
         {
@@ -157,6 +157,28 @@ namespace LrWallPaper.Services
 
                 CREATE INDEX IF NOT EXISTS idx_backup_file ON backup_tasks(file_id);
                 CREATE INDEX IF NOT EXISTS idx_backup_status ON backup_tasks(status);
+            """);
+
+            // Archive history table (device import tracking)
+            db.Execute("""
+                CREATE TABLE IF NOT EXISTS archive_history (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  source_path TEXT NOT NULL,
+                  target_path TEXT NOT NULL,
+                  filename TEXT NOT NULL,
+                  file_size INTEGER NOT NULL DEFAULT 0,
+                  file_md5 TEXT,
+                  transfer_mode TEXT NOT NULL DEFAULT 'copy',
+                  device_name TEXT,
+                  agent_id TEXT,
+                  agent_name TEXT,
+                  camera_model TEXT,
+                  capture_time DATETIME,
+                  archived_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_archive_time ON archive_history(archived_at);
+                CREATE INDEX IF NOT EXISTS idx_archive_agent ON archive_history(agent_id);
             """);
         }
 
@@ -492,5 +514,37 @@ namespace LrWallPaper.Services
         public int FileCount { get; set; }
         [Column("totalSize")]
         public long TotalSize { get; set; }
+    }
+
+    [TableName("archive_history")]
+    [PrimaryKey("id")]
+    public class ArchiveHistoryEntity
+    {
+        [Column("id")]
+        public long Id { get; set; }
+        [Column("source_path")]
+        public string SourcePath { get; set; } = "";
+        [Column("target_path")]
+        public string TargetPath { get; set; } = "";
+        [Column("filename")]
+        public string FileName { get; set; } = "";
+        [Column("file_size")]
+        public long FileSize { get; set; }
+        [Column("file_md5")]
+        public string? FileMD5 { get; set; }
+        [Column("transfer_mode")]
+        public string TransferMode { get; set; } = "copy";
+        [Column("device_name")]
+        public string? DeviceName { get; set; }
+        [Column("agent_id")]
+        public string? AgentId { get; set; }
+        [Column("agent_name")]
+        public string? AgentName { get; set; }
+        [Column("camera_model")]
+        public string? CameraModel { get; set; }
+        [Column("capture_time")]
+        public DateTime? CaptureTime { get; set; }
+        [Column("archived_at")]
+        public DateTime ArchivedAt { get; set; } = DateTime.Now;
     }
 }

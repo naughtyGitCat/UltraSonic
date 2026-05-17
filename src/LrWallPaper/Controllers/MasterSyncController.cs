@@ -56,6 +56,49 @@ public class MasterSyncController : ControllerBase
         return Ok(json);
     }
 
+    [HttpPost("archive-history")]
+    public async Task<IActionResult> SaveArchiveHistory([FromBody] List<ArchiveHistoryEntity> records)
+    {
+        if (records == null || records.Count == 0) return Ok();
+        using var db = _md5Manager.OpenDb();
+        foreach (var r in records)
+            await db.InsertAsync(r);
+        return Ok(new { count = records.Count });
+    }
+
+    [HttpGet("archive-history")]
+    public async Task<IActionResult> GetArchiveHistory([FromQuery] int page = 1, [FromQuery] int pageSize = 50,
+        [FromQuery] string? agentId = null, [FromQuery] string? date = null)
+    {
+        using var db = _md5Manager.OpenDb();
+        var conditions = new List<string>();
+        var parameters = new List<object>();
+        var idx = 0;
+
+        if (!string.IsNullOrEmpty(agentId)) { conditions.Add($"agent_id = @{idx}"); parameters.Add(agentId); idx++; }
+        if (!string.IsNullOrEmpty(date)) { conditions.Add($"DATE(archived_at) = @{idx}"); parameters.Add(date); idx++; }
+
+        var where = conditions.Count > 0 ? "WHERE " + string.Join(" AND ", conditions) : "";
+        var total = await db.SingleAsync<int>($"SELECT COUNT(*) FROM archive_history {where}", parameters.ToArray());
+        var items = await db.FetchAsync<ArchiveHistoryEntity>(
+            $"SELECT * FROM archive_history {where} ORDER BY archived_at DESC LIMIT @{idx} OFFSET @{idx + 1}",
+            parameters.Concat(new object[] { pageSize, (page - 1) * pageSize }).ToArray());
+
+        return Ok(new { total, page, pageSize, items });
+    }
+
+    [HttpGet("archive-history/stats")]
+    public async Task<IActionResult> GetArchiveStats()
+    {
+        using var db = _md5Manager.OpenDb();
+        var total = await db.SingleAsync<int>("SELECT COUNT(*) FROM archive_history");
+        var totalSize = await db.SingleAsync<long>("SELECT COALESCE(SUM(file_size),0) FROM archive_history");
+        var today = await db.SingleAsync<int>("SELECT COUNT(*) FROM archive_history WHERE DATE(archived_at) = DATE('now','localtime')");
+        var devices = await db.FetchAsync<dynamic>("SELECT device_name, COUNT(*) as count FROM archive_history GROUP BY device_name ORDER BY count DESC LIMIT 10");
+        var recentDays = await db.FetchAsync<dynamic>("SELECT DATE(archived_at) as date, COUNT(*) as count FROM archive_history GROUP BY DATE(archived_at) ORDER BY date DESC LIMIT 7");
+        return Ok(new { total, totalSize, today, devices, recentDays });
+    }
+
     [HttpPut("config")]
     public async Task<IActionResult> PutConfig()
     {

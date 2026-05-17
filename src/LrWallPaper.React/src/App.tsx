@@ -11,6 +11,7 @@ import NodeConfigTab from './components/NodeConfigTab';
 import FoldersTab from './components/FoldersTab';
 import LogsTab from './components/LogsTab';
 import BackupTab from './components/BackupTab';
+import ArchiveTab from './components/ArchiveTab';
 
 const GlobalStyles = createGlobalStyle`
   ${styleReset}
@@ -77,6 +78,7 @@ function App() {
               <Tab value={2}>Folders</Tab>
               <Tab value={3}>Logs</Tab>
               <Tab value={4}>Backup</Tab>
+              <Tab value={5}>Archive</Tab>
             </Tabs>
 
             <TabBody style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', padding: '10px', minHeight: 0, overflow: 'hidden' }}>
@@ -85,6 +87,7 @@ function App() {
               {activeTab === 2 && <FoldersTab filterOptions={filterOptions} />}
               {activeTab === 3 && <LogsTab agents={agents} />}
               {activeTab === 4 && <BackupTab />}
+              {activeTab === 5 && <ArchiveTab />}
             </TabBody>
           </WindowContent>
         </Window>
