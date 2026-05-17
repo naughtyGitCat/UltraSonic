@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Button, GroupBox, Table, TableHead, TableRow, TableHeadCell, TableBody, TableDataCell } from 'react95';
 import type { BackupStats, BackupTask } from '../types';
+import { Button, Card, Badge } from '../ui';
 
 export default function BackupTab() {
   const [stats, setStats] = useState<BackupStats | null>(null);
@@ -15,40 +15,44 @@ export default function BackupTab() {
 
   useEffect(() => { fetchStats(); }, []);
 
+  const statusBadge = (s: string) =>
+    s === 'completed' ? <Badge kind="success">{s}</Badge>
+    : s === 'failed' ? <Badge kind="danger">{s}</Badge>
+    : s === 'uploading' ? <Badge kind="accent">{s}</Badge>
+    : <Badge kind="warn">{s}</Badge>;
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minHeight: 0, overflow: 'auto' }}>
-      <GroupBox label="115 Cloud Backup Status">
+    <div className="col scroll-y" style={{ flexGrow: 1, gap: 14 }}>
+      <Card title="115 Cloud Backup">
         {stats ? (
-          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '12px' }}>
-            <div><strong>Total Files:</strong> {stats.totalFiles}</div>
-            <div style={{ color: '#008000' }}><strong>Backed Up:</strong> {stats.backedUp}</div>
-            <div style={{ color: '#808000' }}><strong>Pending:</strong> {stats.pending}</div>
-            <div style={{ color: '#000080' }}><strong>Uploading:</strong> {stats.uploading}</div>
-            <div style={{ color: '#ff0000' }}><strong>Failed:</strong> {stats.failed}</div>
-            <div style={{ color: '#666' }}><strong>Not Queued:</strong> {stats.notQueued}</div>
+          <div className="stats">
+            <div className="stat"><span className="stat-val">{stats.totalFiles}</span><span className="stat-label">Total Files</span></div>
+            <div className="stat"><span className="stat-val" style={{ color: 'var(--success)' }}>{stats.backedUp}</span><span className="stat-label">Backed Up</span></div>
+            <div className="stat"><span className="stat-val" style={{ color: 'var(--warn)' }}>{stats.pending}</span><span className="stat-label">Pending</span></div>
+            <div className="stat"><span className="stat-val" style={{ color: 'var(--accent)' }}>{stats.uploading}</span><span className="stat-label">Uploading</span></div>
+            <div className="stat"><span className="stat-val" style={{ color: 'var(--danger)' }}>{stats.failed}</span><span className="stat-label">Failed</span></div>
+            <div className="stat"><span className="stat-val faint">{stats.notQueued}</span><span className="stat-label">Not Queued</span></div>
             {stats.totalFiles > 0 && (
-              <div><strong>Progress:</strong> {((stats.backedUp / stats.totalFiles) * 100).toFixed(1)}%</div>
+              <div className="stat"><span className="stat-val">{((stats.backedUp / stats.totalFiles) * 100).toFixed(1)}%</span><span className="stat-label">Progress</span></div>
             )}
           </div>
-        ) : <span style={{ fontSize: '11px', color: '#888' }}>Loading...</span>}
-      </GroupBox>
+        ) : <span className="faint">Loading…</span>}
+      </Card>
 
-      <GroupBox label="Actions" style={{ marginTop: '8px' }}>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <Button size="sm" onClick={() => {
+      <Card title="Actions">
+        <div className="toolbar">
+          <Button size="sm" disabled={testing} onClick={() => {
             setTesting(true); setTestResult(null);
             fetch('/api/backup/test', { method: 'POST' }).then(r => r.json())
               .then((d: {ok:boolean; message:string}) => setTestResult(d))
               .catch(err => setTestResult({ ok: false, message: err.message }))
               .finally(() => setTesting(false));
-          }} disabled={testing}>
-            {testing ? 'Testing...' : 'Test Connection'}
-          </Button>
+          }}>{testing ? 'Testing…' : 'Test Connection'}</Button>
           <Button size="sm" onClick={() => {
             fetch('/api/backup/queue-all?limit=100', { method: 'POST' }).then(r => r.json())
               .then((d: {queued:number}) => { alert(`Queued ${d.queued} files for backup`); fetchStats(); });
           }}>Queue Unbackup Files</Button>
-          <Button size="sm" onClick={() => {
+          <Button size="sm" variant="primary" onClick={() => {
             fetch('/api/backup/process?limit=10', { method: 'POST' }).then(r => r.json())
               .then((d: {processed:number; succeeded:number; failed:number}) => {
                 alert(`Processed: ${d.processed}, Succeeded: ${d.succeeded}, Failed: ${d.failed}`);
@@ -58,49 +62,39 @@ export default function BackupTab() {
           <Button size="sm" onClick={() => {
             fetch('/api/backup/retry-failed', { method: 'POST' }).then(() => { alert('Failed tasks reset'); fetchStats(); });
           }}>Retry Failed</Button>
-          <Button size="sm" onClick={fetchStats}>Refresh</Button>
+          <span className="spacer" />
+          <Button size="sm" variant="ghost" onClick={fetchStats}>Refresh</Button>
         </div>
         {testResult && (
-          <div style={{ marginTop: '6px', fontSize: '11px', color: testResult.ok ? '#008000' : '#ff0000' }}>
-            {testResult.ok ? 'OK' : 'FAILED'} - {testResult.message}
+          <div style={{ marginTop: 10, fontSize: 12, color: testResult.ok ? 'var(--success)' : 'var(--danger)' }}>
+            {testResult.ok ? '✓ OK' : '✗ FAILED'} — {testResult.message}
           </div>
         )}
-      </GroupBox>
+      </Card>
 
-      <GroupBox label="Recent Backup Tasks" style={{ marginTop: '8px', flexGrow: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ overflow: 'auto', flexGrow: 1 }}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableHeadCell style={{ fontSize: '10px' }}>File</TableHeadCell>
-                <TableHeadCell style={{ fontSize: '10px' }}>Status</TableHeadCell>
-                <TableHeadCell style={{ fontSize: '10px' }}>Remote Path</TableHeadCell>
-                <TableHeadCell style={{ fontSize: '10px' }}>Last Attempt</TableHeadCell>
-                <TableHeadCell style={{ fontSize: '10px' }}>Error</TableHeadCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
+      <div className="col" style={{ flexGrow: 1, minHeight: 0, gap: 8 }}>
+        <div className="card-title">Recent Backup Tasks</div>
+        <div className="tbl-wrap">
+          <table className="tbl">
+            <thead><tr><th>File</th><th>Status</th><th>Remote Path</th><th>Last Attempt</th><th>Error</th></tr></thead>
+            <tbody>
               {recent.map(t => (
-                <TableRow key={t.id}>
-                  <TableDataCell style={{ fontSize: '10px' }}>{t.fileName || `#${t.fileId}`}</TableDataCell>
-                  <TableDataCell style={{ fontSize: '10px', color: t.status === 'completed' ? '#008000' : t.status === 'failed' ? '#ff0000' : t.status === 'uploading' ? '#000080' : '#808000' }}>
-                    {t.status}
-                  </TableDataCell>
-                  <TableDataCell style={{ fontSize: '10px' }}>{t.remotePath || '-'}</TableDataCell>
-                  <TableDataCell style={{ fontSize: '10px' }}>{t.lastAttempt ? new Date(t.lastAttempt).toLocaleString() : '-'}</TableDataCell>
-                  <TableDataCell style={{ fontSize: '10px', color: '#ff0000' }}>{t.errorMessage || ''}</TableDataCell>
-                </TableRow>
+                <tr key={t.id}>
+                  <td>{t.fileName || `#${t.fileId}`}</td>
+                  <td>{statusBadge(t.status)}</td>
+                  <td className="muted">{t.remotePath || '-'}</td>
+                  <td className="muted">{t.lastAttempt ? new Date(t.lastAttempt).toLocaleString() : '-'}</td>
+                  <td style={{ color: 'var(--danger)' }}>{t.errorMessage || ''}</td>
+                </tr>
               ))}
-              {recent.length === 0 && (
-                <TableRow><td colSpan={5} style={{ fontSize: '11px', textAlign: 'center', color: '#888', padding: '8px' }}>No backup tasks yet</td></TableRow>
-              )}
-            </TableBody>
-          </Table>
+              {recent.length === 0 && <tr><td colSpan={5} className="cell-empty">No backup tasks yet</td></tr>}
+            </tbody>
+          </table>
         </div>
-      </GroupBox>
+      </div>
 
-      <div style={{ marginTop: '8px', fontSize: '10px', color: '#666' }}>
-        Configure 115 Cookie and backup settings in Node Config tab &rarr; master config &rarr; Backup section.
+      <div className="faint" style={{ fontSize: 11 }}>
+        Configure 115 Cookie &amp; backup settings in Nodes → Master config → Backup section.
       </div>
     </div>
   );

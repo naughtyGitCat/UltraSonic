@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Window, WindowHeader, WindowContent, Button, GroupBox } from 'react95';
 import type { Capture, Tag, FaceInfo, Person } from '../types';
 import { VIDEO_EXTS, getExt, formatFileSize } from '../utils';
+import { Button, Card } from '../ui';
 
 interface Props {
   capture: Capture;
@@ -21,16 +21,13 @@ export default function DetailModal({ capture, captures, index, onClose, onNavig
   const absolutePath = capture.fileFullPath || `${capture.filePath}\\${capture.fileName}`;
   const imgSrc = `/api/image?path=${encodeURIComponent(absolutePath)}&agentId=${capture.agentId || 'local'}`;
 
-  // Tags for this file
   const [fileTags, setFileTags] = useState<Tag[]>([]);
   const [newTagName, setNewTagName] = useState('');
   const fetchFileTags = () => { fetch(`/api/tag/file/${capture.id}`).then(r => r.json()).then(setFileTags).catch(() => {}); };
 
-  // Live Photo: check for companion MOV
   const [livePhotoMov, setLivePhotoMov] = useState<Capture | null>(null);
   const [showLivePhoto, setShowLivePhoto] = useState(false);
 
-  // Face detection
   const [faces, setFaces] = useState<FaceInfo[]>([]);
   const [showFaces, setShowFaces] = useState(false);
   const [persons, setPersons] = useState<Person[]>([]);
@@ -51,6 +48,7 @@ export default function DetailModal({ capture, captures, index, onClose, onNavig
         .then(d => setLivePhotoMov(d))
         .catch(() => {});
     }
+    // eslint-disable-next-line
   }, [capture.id]);
 
   useEffect(() => {
@@ -64,17 +62,16 @@ export default function DetailModal({ capture, captures, index, onClose, onNavig
   }, [index, captures.length, onClose, onNavigate]);
 
   return (
-    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}
-         onClick={onClose}>
-      <Window style={{ width: '90vw', height: '90vh', maxWidth: '1100px', display: 'flex', flexDirection: 'column' }}
-              onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-        <WindowHeader style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span>{capture.fileName}</span>
-          <Button size="sm" onClick={onClose}>X</Button>
-        </WindowHeader>
-        <WindowContent style={{ flexGrow: 1, display: 'flex', gap: '10px', padding: '8px', minHeight: 0, overflow: 'hidden' }}>
-          <div style={{ flex: '1 1 70%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <div style={{ flexGrow: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#000', border: '2px inset #dfdfdf', position: 'relative' }}>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ width: '92vw', height: '90vh', maxWidth: 1180 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <span className="modal-title">{capture.fileName}</span>
+          <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        <div style={{ flex: 1, display: 'flex', gap: 12, padding: 14, minHeight: 0 }}>
+          <div className="col" style={{ flex: '1 1 70%', minHeight: 0, gap: 10 }}>
+            <div style={{ flexGrow: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: '#0b0d12', border: '1px solid var(--border)', borderRadius: 'var(--r)', position: 'relative' }}>
               {isVideo
                 ? <video src={imgSrc} controls style={{ maxWidth: '100%', maxHeight: '100%' }} />
                 : showLivePhoto && livePhotoMov
@@ -82,42 +79,36 @@ export default function DetailModal({ capture, captures, index, onClose, onNavig
                       src={`/api/image?path=${encodeURIComponent(livePhotoMov.fileFullPath || `${livePhotoMov.filePath}\\${livePhotoMov.fileName}`)}&agentId=${livePhotoMov.agentId || 'local'}`}
                       autoPlay loop muted style={{ maxWidth: '100%', maxHeight: '100%' }} />
                   : <img src={imgSrc} alt={capture.fileName} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />}
-              {/* Face detection overlays */}
               {showFaces && faces.map(f => (
                 <div key={f.id} style={{
                   position: 'absolute',
                   left: `${f.regionX * 100}%`, top: `${f.regionY * 100}%`,
                   width: `${f.regionW * 100}%`, height: `${f.regionH * 100}%`,
-                  border: '2px solid #00ff00', boxSizing: 'border-box',
-                  pointerEvents: 'auto', cursor: 'pointer'
+                  border: '2px solid #3fb950', borderRadius: 3, boxSizing: 'border-box', cursor: 'pointer'
                 }} title={f.personName || 'Unknown'}>
-                  <span style={{ position: 'absolute', bottom: '-18px', left: 0, fontSize: '10px',
-                    backgroundColor: 'rgba(0,0,0,0.7)', color: '#0f0', padding: '1px 4px', whiteSpace: 'nowrap' }}>
+                  <span style={{ position: 'absolute', bottom: -20, left: 0, fontSize: 10,
+                    background: 'rgba(0,0,0,0.75)', color: '#3fb950', padding: '1px 5px', borderRadius: 3, whiteSpace: 'nowrap' }}>
                     {f.personName || '?'}
                   </span>
                 </div>
               ))}
               {livePhotoMov && (
-                <div style={{ position: 'absolute', top: '8px', left: '8px' }}>
+                <div style={{ position: 'absolute', top: 10, left: 10 }}>
                   <Button size="sm" active={showLivePhoto}
-                    onMouseDown={() => setShowLivePhoto(true)}
-                    onMouseUp={() => setShowLivePhoto(false)}
-                    onMouseLeave={() => setShowLivePhoto(false)}
-                    onClick={() => setShowLivePhoto(!showLivePhoto)}>
-                    LIVE
-                  </Button>
+                    onClick={() => setShowLivePhoto(!showLivePhoto)}>● LIVE</Button>
                 </div>
               )}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '6px', flexShrink: 0 }}>
-              <Button disabled={index <= 0} onClick={() => onNavigate(index - 1)}>&lt; Prev</Button>
-              <span style={{ fontSize: '11px', lineHeight: '28px' }}>{index + 1} / {captures.length}</span>
-              <Button disabled={index >= captures.length - 1} onClick={() => onNavigate(index + 1)}>Next &gt;</Button>
+            <div className="row" style={{ justifyContent: 'center', gap: 10, flexShrink: 0 }}>
+              <Button size="sm" disabled={index <= 0} onClick={() => onNavigate(index - 1)}>‹ Prev</Button>
+              <span className="muted" style={{ fontSize: 12, minWidth: 70, textAlign: 'center' }}>{index + 1} / {captures.length}</span>
+              <Button size="sm" disabled={index >= captures.length - 1} onClick={() => onNavigate(index + 1)}>Next ›</Button>
             </div>
           </div>
-          <div style={{ flex: '0 0 200px', overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
-            <GroupBox label="Properties" style={{ flexGrow: 1 }}>
-              <table style={{ fontSize: '11px', width: '100%', borderCollapse: 'collapse' }}>
+
+          <div className="col scroll-y" style={{ flex: '0 0 240px', gap: 10 }}>
+            <Card title="Properties">
+              <table style={{ fontSize: 12, width: '100%', borderCollapse: 'collapse' }}>
                 <tbody>
                   {[
                     ['File', capture.fileName],
@@ -126,63 +117,59 @@ export default function DetailModal({ capture, captures, index, onClose, onNavig
                     ['Time', capture.captureTime ? new Date(capture.captureTime).toLocaleString() : '-'],
                     ['Size', formatFileSize(capture.fileSize)],
                     ['GPS', capture.latitude != null && capture.longitude != null
-                      ? `${capture.latitude.toFixed(6)}, ${capture.longitude.toFixed(6)}` : '-'],
+                      ? `${capture.latitude.toFixed(5)}, ${capture.longitude.toFixed(5)}` : '-'],
                     ['Source', capture.agentId === 'local' ? 'Local' : capture.agentId?.substring(0, 8) || '-'],
                     ['MD5', capture.fileMd5?.substring(0, 12) || '-'],
                   ].map(([k, v]) => (
                     <tr key={k as string}>
-                      <td style={{ padding: '3px 4px', fontWeight: 'bold', whiteSpace: 'nowrap', verticalAlign: 'top' }}>{k}</td>
-                      <td style={{ padding: '3px 4px', wordBreak: 'break-all' }}>{v}</td>
+                      <td style={{ padding: '4px 6px 4px 0', color: 'var(--text-muted)', whiteSpace: 'nowrap', verticalAlign: 'top', fontWeight: 600 }}>{k}</td>
+                      <td style={{ padding: '4px 0', wordBreak: 'break-all' }}>{v}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </GroupBox>
-            <GroupBox label="Tags" style={{ marginTop: '6px' }}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px', marginBottom: '4px' }}>
+            </Card>
+
+            <Card title="Tags">
+              <div className="row wrap" style={{ gap: 5, marginBottom: 8 }}>
                 {fileTags.map(t => (
-                  <span key={t.id} style={{ fontSize: '10px', backgroundColor: '#000080', color: '#fff', padding: '1px 6px', borderRadius: '2px', cursor: 'pointer' }}
+                  <span key={t.id} className="chip"
                     onClick={() => { fetch(`/api/tag/file/${capture.id}/${t.id}`, { method: 'DELETE' }).then(fetchFileTags); }}
-                    title="Click to remove">{t.name} x</span>
+                    title="Click to remove">{t.name} ✕</span>
                 ))}
-                {fileTags.length === 0 && <span style={{ fontSize: '10px', color: '#888' }}>No tags</span>}
+                {fileTags.length === 0 && <span className="faint" style={{ fontSize: 11 }}>No tags</span>}
               </div>
-              <div style={{ display: 'flex', gap: '2px' }}>
-                <select style={{ flex: 1, fontSize: '10px', border: '2px inset #dfdfdf', fontFamily: 'ms_sans_serif' }}
-                  onChange={e => {
-                    if (e.target.value) fetch(`/api/tag/file/${capture.id}/${e.target.value}`, { method: 'POST' }).then(fetchFileTags);
-                    e.target.value = '';
-                  }}>
-                  <option value="">+ Add tag...</option>
-                  {allTags.filter(t => !fileTags.some(ft => ft.id === t.id)).map(t => (
-                    <option key={t.id} value={t.id}>{t.category ? t.category + '/' : ''}{t.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div style={{ display: 'flex', gap: '2px', marginTop: '4px' }}>
-                <input type="text" placeholder="New tag" value={newTagName}
-                  onChange={e => setNewTagName(e.target.value)}
-                  style={{ flex: 1, fontSize: '10px', border: '2px inset #dfdfdf', padding: '1px 3px', fontFamily: 'ms_sans_serif' }}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && newTagName.trim()) {
-                      fetch('/api/tag', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newTagName.trim(), category: '' }) })
-                        .then(r => r.json())
-                        .then((tag: Tag) => { fetch(`/api/tag/file/${capture.id}/${tag.id}`, { method: 'POST' }).then(() => { fetchFileTags(); onTagsChanged(); setNewTagName(''); }); });
-                    }
-                  }} />
-              </div>
-            </GroupBox>
-            <GroupBox label="Faces" style={{ marginTop: '6px' }}>
-              <div style={{ fontSize: '10px', marginBottom: '4px' }}>
-                {faces.length > 0 ? `${faces.length} face(s) detected` : 'No faces detected'}
-                {faces.length > 0 && <span style={{ cursor: 'pointer', marginLeft: '6px', color: '#000080' }}
-                  onClick={() => setShowFaces(p => !p)}>[{showFaces ? 'Hide' : 'Show'}]</span>}
+              <select className="select" style={{ width: '100%', marginBottom: 6 }}
+                onChange={e => {
+                  if (e.target.value) fetch(`/api/tag/file/${capture.id}/${e.target.value}`, { method: 'POST' }).then(fetchFileTags);
+                  e.target.value = '';
+                }}>
+                <option value="">+ Add tag…</option>
+                {allTags.filter(t => !fileTags.some(ft => ft.id === t.id)).map(t => (
+                  <option key={t.id} value={t.id}>{t.category ? t.category + '/' : ''}{t.name}</option>
+                ))}
+              </select>
+              <input type="text" className="input" placeholder="New tag (Enter)" value={newTagName}
+                style={{ width: '100%' }}
+                onChange={e => setNewTagName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && newTagName.trim()) {
+                    fetch('/api/tag', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newTagName.trim(), category: '' }) })
+                      .then(r => r.json())
+                      .then((tag: Tag) => { fetch(`/api/tag/file/${capture.id}/${tag.id}`, { method: 'POST' }).then(() => { fetchFileTags(); onTagsChanged(); setNewTagName(''); }); });
+                  }
+                }} />
+            </Card>
+
+            <Card title="Faces">
+              <div className="row" style={{ fontSize: 11, marginBottom: 8, justifyContent: 'space-between' }}>
+                <span className="muted">{faces.length > 0 ? `${faces.length} face(s)` : 'None detected'}</span>
+                {faces.length > 0 && <span className="chip" onClick={() => setShowFaces(p => !p)}>{showFaces ? 'Hide' : 'Show'}</span>}
               </div>
               {faces.map(f => (
-                <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: '3px', marginBottom: '3px' }}>
-                  <div style={{ width: '8px', height: '8px', backgroundColor: '#00ff00', borderRadius: '50%', flexShrink: 0 }} />
-                  <select style={{ flex: 1, fontSize: '10px', border: '2px inset #dfdfdf', fontFamily: 'ms_sans_serif' }}
-                    value={f.personId || ''}
+                <div key={f.id} className="row" style={{ gap: 5, marginBottom: 5 }}>
+                  <span style={{ width: 8, height: 8, background: '#3fb950', borderRadius: '50%', flexShrink: 0 }} />
+                  <select className="select" style={{ flex: 1 }} value={f.personId || ''}
                     onChange={e => {
                       const val = e.target.value;
                       if (val === '__new__') {
@@ -196,44 +183,40 @@ export default function DetailModal({ capture, captures, index, onClose, onNavig
                     }}>
                     <option value="">Unknown</option>
                     {persons.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    <option value="__new__">+ New person...</option>
+                    <option value="__new__">+ New person…</option>
                   </select>
                 </div>
               ))}
-            </GroupBox>
-            <Button style={{ marginTop: '6px', width: '100%' }}
-              onClick={() => {
-                fetch('/api/recognition/providers').then(r => r.json()).then((data: {defaultProvider:string; providers: Array<{name:string;configured:boolean}>}) => {
-                  const configured = data.providers.filter(p => p.configured);
-                  if (configured.length === 0) { alert('No API keys configured. Go to Node Config > Image Recognition to set up.'); return; }
-                  const provider = configured.find(p => p.name === data.defaultProvider)?.name || configured[0].name;
-                  fetch('/api/recognition/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ fileIds: [capture.id], provider }) })
-                    .then(r => r.json()).then(() => { fetchFileTags(); onTagsChanged(); alert('Recognition complete'); })
-                    .catch(err => alert('Recognition failed: ' + err.message));
-                });
-              }}>AI Recognize</Button>
-            <Button style={{ marginTop: '4px', width: '100%' }}
-              onClick={() => {
-                fetch('/api/recognition/providers').then(r => r.json()).then((data: {defaultProvider:string; providers: Array<{name:string;configured:boolean}>}) => {
-                  const configured = data.providers.filter(p => p.configured);
-                  if (configured.length === 0) { alert('No API keys configured.'); return; }
-                  const provider = configured.find(p => p.name === data.defaultProvider)?.name || configured[0].name;
-                  fetch('/api/face/detect', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ fileIds: [capture.id], provider }) })
-                    .then(r => r.json()).then(() => { fetchFaces(); alert('Face detection complete'); })
-                    .catch(err => alert('Face detection failed: ' + err.message));
-                });
-              }}>Face Detect</Button>
-            <Button style={{ marginTop: '4px', width: '100%', color: '#ff0000' }}
-              onClick={() => {
-                if (window.confirm(`Delete "${capture.fileName}"? This will remove the file from disk.`)) {
-                  onDelete(capture.id);
-                }
-              }}>Delete File</Button>
+            </Card>
+
+            <Button style={{ width: '100%' }} onClick={() => {
+              fetch('/api/recognition/providers').then(r => r.json()).then((data: {defaultProvider:string; providers: Array<{name:string;configured:boolean}>}) => {
+                const configured = data.providers.filter(p => p.configured);
+                if (configured.length === 0) { alert('No API keys configured. Go to Nodes → Image Recognition.'); return; }
+                const provider = configured.find(p => p.name === data.defaultProvider)?.name || configured[0].name;
+                fetch('/api/recognition/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ fileIds: [capture.id], provider }) })
+                  .then(r => r.json()).then(() => { fetchFileTags(); onTagsChanged(); alert('Recognition complete'); })
+                  .catch(err => alert('Recognition failed: ' + err.message));
+              });
+            }}>AI Recognize</Button>
+            <Button style={{ width: '100%' }} onClick={() => {
+              fetch('/api/recognition/providers').then(r => r.json()).then((data: {defaultProvider:string; providers: Array<{name:string;configured:boolean}>}) => {
+                const configured = data.providers.filter(p => p.configured);
+                if (configured.length === 0) { alert('No API keys configured.'); return; }
+                const provider = configured.find(p => p.name === data.defaultProvider)?.name || configured[0].name;
+                fetch('/api/face/detect', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ fileIds: [capture.id], provider }) })
+                  .then(r => r.json()).then(() => { fetchFaces(); alert('Face detection complete'); })
+                  .catch(err => alert('Face detection failed: ' + err.message));
+              });
+            }}>Face Detect</Button>
+            <Button variant="danger" style={{ width: '100%' }} onClick={() => {
+              if (window.confirm(`Delete "${capture.fileName}"? This will remove the file from disk.`)) onDelete(capture.id);
+            }}>Delete File</Button>
           </div>
-        </WindowContent>
-      </Window>
+        </div>
+      </div>
     </div>
   );
 }

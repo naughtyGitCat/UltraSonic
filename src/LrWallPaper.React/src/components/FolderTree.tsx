@@ -36,18 +36,13 @@ function TreeNodeView({ node, depth, selectedFolder, onSelect }: {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', padding: '1px 2px', paddingLeft: depth * 16 + 2,
-        cursor: isLeaf ? 'pointer' : hasChildren ? 'pointer' : 'default',
-        backgroundColor: isSelected ? '#000080' : 'transparent', color: isSelected ? '#fff' : '#000' }}
+      <div className={'tree-row' + (isSelected ? ' sel' : '')}
+        style={{ paddingLeft: depth * 15 + 6 }}
         onClick={() => { if (isLeaf && node.folder) onSelect(node.folder); if (hasChildren) setExpanded(!expanded); }}>
-        <span style={{ width: '14px', textAlign: 'center', fontSize: '10px', flexShrink: 0 }}>
-          {hasChildren ? (expanded ? '-' : '+') : ' '}
-        </span>
-        <span style={{ marginRight: '4px', fontSize: '12px' }}>{isLeaf ? '\uD83D\uDCC1' : '\uD83D\uDCC2'}</span>
-        <span style={{ flexGrow: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{node.name}</span>
-        {isLeaf && node.folder && <span style={{ color: isSelected ? '#ccc' : '#888', marginLeft: '4px', flexShrink: 0, fontSize: '10px' }}>
-          {node.folder.fileCount}
-        </span>}
+        <span className="tree-caret">{hasChildren ? (expanded ? '▾' : '▸') : ''}</span>
+        <span>{isLeaf ? '📁' : '📂'}</span>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{node.name}</span>
+        {isLeaf && node.folder && <span className="tree-count">{node.folder.fileCount}</span>}
       </div>
       {expanded && Array.from(node.children.values()).map(child =>
         <TreeNodeView key={child.fullPath} node={child} depth={depth + 1} selectedFolder={selectedFolder} onSelect={onSelect} />
@@ -60,6 +55,6 @@ export default function FolderTree({ folders, selectedFolder, onSelect }: {
   folders: FolderSummary[]; selectedFolder: FolderSummary | null; onSelect: (f: FolderSummary) => void;
 }) {
   const tree = buildTree(folders);
-  if (tree.children.size === 0) return <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>No folders found</div>;
-  return <div style={{ padding: '2px' }}>{Array.from(tree.children.values()).map(n => <TreeNodeView key={n.fullPath} node={n} depth={0} selectedFolder={selectedFolder} onSelect={onSelect} />)}</div>;
+  if (tree.children.size === 0) return <div className="faint" style={{ padding: 20, textAlign: 'center' }}>No folders found</div>;
+  return <div className="tree">{Array.from(tree.children.values()).map(n => <TreeNodeView key={n.fullPath} node={n} depth={0} selectedFolder={selectedFolder} onSelect={onSelect} />)}</div>;
 }

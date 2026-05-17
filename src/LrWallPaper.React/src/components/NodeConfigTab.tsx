@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Button, TextInput, ScrollView, GroupBox, Table, TableHead, TableRow, TableHeadCell, TableBody, TableDataCell } from 'react95';
 import type { Agent, ScanStatus } from '../types';
 import { renderConfigFields } from '../utils';
+import { Button, TextInput, Card, Badge } from '../ui';
 
 export default function NodeConfigTab() {
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -68,77 +68,75 @@ export default function NodeConfigTab() {
     fetch(`/api/agent/${id}`, { method: 'DELETE' }).then(() => fetchAgents());
   };
 
+  const healthBadge = (h: 'healthy' | 'unhealthy' | 'checking') =>
+    h === 'healthy' ? <Badge kind="success"><span className="dot" />Online</Badge>
+    : h === 'unhealthy' ? <Badge kind="danger"><span className="dot" />Down</Badge>
+    : <Badge>…</Badge>;
+
+  const editingName = editingNodeId === 'local' ? 'Master' : agents.find(a => a.id === editingNodeId)?.name || editingNodeId;
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <fieldset style={{ border: '2px solid groove', padding: '15px' }}>
-        <legend>Register New Edge Node</legend>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <label>Name:</label>
-          <TextInput placeholder="e.g. Z690 Desktop" value={newAgentName} onChange={(e) => setNewAgentName(e.target.value)} />
-          <label>API Endpoint:</label>
-          <TextInput placeholder="e.g. http://192.168.1.100:5000" value={newAgentIp} onChange={(e) => setNewAgentIp(e.target.value)} style={{ width: '250px' }} />
-          <Button onClick={handleAddAgent}>Add Node</Button>
-          <Button onClick={fetchAgents}>Refresh</Button>
-          <Button onClick={() => {
+    <div className="col scroll-y" style={{ flexGrow: 1, gap: 14 }}>
+      <Card title="Register Edge Node">
+        <div className="toolbar">
+          <div className="field"><label>Name</label>
+            <TextInput placeholder="e.g. Z690 Desktop" value={newAgentName} onChange={e => setNewAgentName(e.target.value)} /></div>
+          <div className="field"><label>Endpoint</label>
+            <TextInput placeholder="http://192.168.1.100:5282" value={newAgentIp} onChange={e => setNewAgentIp(e.target.value)} style={{ width: 240 }} /></div>
+          <Button variant="primary" size="sm" onClick={handleAddAgent}>Add Node</Button>
+          <Button size="sm" onClick={fetchAgents}>Refresh</Button>
+          <span className="spacer" />
+          <Button size="sm" variant="danger" onClick={() => {
             if (window.confirm('Clear image cache on Master and all Agents?'))
               fetch('/api/cache', { method: 'DELETE' }).then(r => r.json()).then(d => alert(`Cache cleared: ${d.masterCleared} files, ${d.agentsNotified} agents notified`));
           }}>Clear Cache</Button>
         </div>
-      </fieldset>
-      <ScrollView style={{ height: '300px' }}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableHeadCell>Name</TableHeadCell>
-              <TableHeadCell>IP</TableHeadCell>
-              <TableHeadCell>Port</TableHeadCell>
-              <TableHeadCell>Version</TableHeadCell>
-              <TableHeadCell>Health</TableHeadCell>
-              <TableHeadCell>Heartbeat</TableHeadCell>
-              <TableHeadCell>Actions</TableHeadCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            <TableRow style={{ cursor: 'pointer', backgroundColor: editingNodeId === 'local' ? '#000080' : undefined, color: editingNodeId === 'local' ? '#fff' : undefined }}
-              onClick={() => loadConfig('local')}>
-              <TableDataCell>Master Local</TableDataCell>
-              <TableDataCell>{window.location.hostname}</TableDataCell>
-              <TableDataCell>5281</TableDataCell>
-              <TableDataCell>{masterVersion}</TableDataCell>
-              <TableDataCell style={{ color: masterHealth === 'healthy' ? 'green' : masterHealth === 'unhealthy' ? 'red' : '#666' }}>
-                {masterHealth === 'healthy' ? 'OK' : masterHealth === 'unhealthy' ? 'DOWN' : '...'}
-              </TableDataCell>
-              <TableDataCell>-</TableDataCell>
-              <TableDataCell>Built-in</TableDataCell>
-            </TableRow>
+      </Card>
+
+      <div className="tbl-wrap" style={{ maxHeight: 320, flex: 'none' }}>
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th>Name</th><th>Host</th><th>Port</th><th>Version</th><th>Health</th><th>Heartbeat</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr className={'row-click' + (editingNodeId === 'local' ? ' row-sel' : '')} onClick={() => loadConfig('local')}>
+              <td><strong>Master Local</strong></td>
+              <td>{window.location.hostname}</td>
+              <td>5281</td>
+              <td className="muted">{masterVersion}</td>
+              <td>{healthBadge(masterHealth)}</td>
+              <td className="faint">—</td>
+              <td className="faint">Built-in</td>
+            </tr>
             {agents.map(agent => {
               let agentIp = '-', agentPort = '-';
-              try { const u = new URL(agent.endpoint); agentIp = u.hostname; agentPort = u.port; } catch {}
+              try { const u = new URL(agent.endpoint); agentIp = u.hostname; agentPort = u.port; } catch { /* ignore */ }
               return (
-              <TableRow key={agent.id} style={{ cursor: 'pointer', backgroundColor: editingNodeId === agent.id ? '#000080' : undefined, color: editingNodeId === agent.id ? '#fff' : undefined }}
-                onClick={() => loadConfig(agent.id)}>
-                <TableDataCell>{agent.name}</TableDataCell>
-                <TableDataCell>{agentIp}</TableDataCell>
-                <TableDataCell>{agentPort}</TableDataCell>
-                <TableDataCell>{agent.version || '-'}</TableDataCell>
-                <TableDataCell style={{ color: agentHealth[agent.id] === 'healthy' ? 'green' : agentHealth[agent.id] === 'unhealthy' ? 'red' : '#666' }}>
-                  {agentHealth[agent.id] === 'healthy' ? 'OK' : agentHealth[agent.id] === 'unhealthy' ? 'DOWN' : '...'}
-                </TableDataCell>
-                <TableDataCell>{agent.lastSeen ? new Date(agent.lastSeen).toLocaleString() : '-'}</TableDataCell>
-                <TableDataCell style={{ display: 'flex', gap: '4px' }} onClick={e => e.stopPropagation()}>
-                  <Button size="sm" onClick={() => {
-                    if (window.confirm(`Clear all records for "${agent.name}" and trigger rescan?`))
-                      fetch(`/api/experiment/agent/${agent.id}`, { method: 'DELETE' }).then(() => alert('Rescan triggered'));
-                  }}>Rescan</Button>
-                  <Button size="sm" onClick={() => handleDeleteAgent(agent.id)}>Delete</Button>
-                </TableDataCell>
-              </TableRow>
-            );})}
-          </TableBody>
-        </Table>
-      </ScrollView>
+                <tr key={agent.id} className={'row-click' + (editingNodeId === agent.id ? ' row-sel' : '')} onClick={() => loadConfig(agent.id)}>
+                  <td><strong>{agent.name}</strong></td>
+                  <td>{agentIp}</td>
+                  <td>{agentPort}</td>
+                  <td className="muted">{agent.version || '-'}</td>
+                  <td>{healthBadge(agentHealth[agent.id])}</td>
+                  <td className="muted">{agent.lastSeen ? new Date(agent.lastSeen).toLocaleString() : '-'}</td>
+                  <td onClick={e => e.stopPropagation()}>
+                    <div className="row" style={{ gap: 6 }}>
+                      <Button size="sm" onClick={() => {
+                        if (window.confirm(`Clear all records for "${agent.name}" and trigger rescan?`))
+                          fetch(`/api/experiment/agent/${agent.id}`, { method: 'DELETE' }).then(() => alert('Rescan triggered'));
+                      }}>Rescan</Button>
+                      <Button size="sm" variant="danger" onClick={() => handleDeleteAgent(agent.id)}>Delete</Button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
-      {/* Scan Status Panel */}
       {editingNodeId && editingNodeId !== 'local' && (() => {
         const a = agents.find(x => x.id === editingNodeId);
         const s = a?.scanStatus;
@@ -146,31 +144,29 @@ export default function NodeConfigTab() {
         const fmtDur = (sec?: number) => { if (!sec) return '-'; const m = Math.floor(sec / 60); const ss = Math.floor(sec % 60); return m > 0 ? `${m}m ${ss}s` : `${ss}s`; };
         const fmtTime = (t?: string) => t ? new Date(t).toLocaleString() : '-';
         return (
-          <GroupBox label="Scan Status" style={{ marginTop: '10px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '2px 8px', fontSize: '11px' }}>
-              <b>Status:</b><span style={{ color: s.isScanning ? '#008000' : '#666' }}>{s.isScanning ? 'Scanning...' : 'Idle'}</span>
-              {s.isScanning && <><b>Current File:</b><span style={{ wordBreak: 'break-all' }}>{s.currentFile || '-'}</span></>}
-              {s.isScanning && <><b>Files Processed:</b><span>{s.filesProcessed ?? 0}</span></>}
-              <b>Last Scan Start:</b><span>{fmtTime(s.lastScanStart)}</span>
-              <b>Last Scan End:</b><span>{fmtTime(s.lastScanEnd)}</span>
-              <b>Last Scan Duration:</b><span>{fmtDur(s.lastScanDurationSeconds)}</span>
-              <b>Next Scan:</b><span>{fmtTime(s.nextScanTime)}</span>
-              {s.lastError && <><b style={{ color: 'red' }}>Last Error:</b><span style={{ color: 'red' }}>{s.lastError}</span></>}
+          <Card title="Scan Status">
+            <div className="cfg-grid" style={{ gridTemplateColumns: '150px 1fr' }}>
+              <label>Status</label><span style={{ color: s.isScanning ? 'var(--success)' : 'var(--text-muted)' }}>{s.isScanning ? 'Scanning…' : 'Idle'}</span>
+              {s.isScanning && <><label>Current File</label><span style={{ wordBreak: 'break-all' }}>{s.currentFile || '-'}</span></>}
+              {s.isScanning && <><label>Files Processed</label><span>{s.filesProcessed ?? 0}</span></>}
+              <label>Last Scan Start</label><span>{fmtTime(s.lastScanStart)}</span>
+              <label>Last Scan End</label><span>{fmtTime(s.lastScanEnd)}</span>
+              <label>Last Duration</label><span>{fmtDur(s.lastScanDurationSeconds)}</span>
+              <label>Next Scan</label><span>{fmtTime(s.nextScanTime)}</span>
+              {s.lastError && <><label style={{ color: 'var(--danger)' }}>Last Error</label><span style={{ color: 'var(--danger)' }}>{s.lastError}</span></>}
             </div>
-          </GroupBox>
+          </Card>
         );
       })()}
 
-      {/* Image Recognition Settings */}
       {editingNodeId === 'local' && (
-        <GroupBox label="Image Recognition" style={{ marginTop: '10px' }}>
-          <div style={{ fontSize: '11px' }}>
+        <Card title="Image Recognition">
+          <div className="col" style={{ gap: 8 }}>
             {['Claude', 'OpenAI', 'Gemini'].map(p => (
-              <div key={p} style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '4px' }}>
-                <b style={{ width: '50px' }}>{p}:</b>
-                <input type="password" placeholder="API Key"
-                  style={{ flex: 1, border: '2px inset #dfdfdf', padding: '2px 4px', fontSize: '11px', fontFamily: 'ms_sans_serif' }}
-                  defaultValue={(() => { try { return (nodeConfig as any)?.UltraSonic?.Recognition?.ApiKeys?.[p] || ''; } catch { return ''; } })()}
+              <div key={p} className="row" style={{ gap: 8 }}>
+                <strong style={{ width: 56 }}>{p}</strong>
+                <input type="password" placeholder="API Key" className="input" style={{ flex: 1 }}
+                  defaultValue={(() => { try { return (nodeConfig as Record<string, any>)?.UltraSonic?.Recognition?.ApiKeys?.[p] || ''; } catch { return ''; } })()}
                   onChange={e => {
                     if (!nodeConfig) return;
                     const c = JSON.parse(JSON.stringify(nodeConfig));
@@ -187,25 +183,21 @@ export default function NodeConfigTab() {
               </div>
             ))}
           </div>
-        </GroupBox>
+        </Card>
       )}
 
-      {/* Config Editor Panel */}
       {editingNodeId && nodeConfig && (
-        <GroupBox label={`Config: ${editingNodeId === 'local' ? 'Master' : agents.find(a => a.id === editingNodeId)?.name || editingNodeId}`}
-          style={{ marginTop: '10px', maxHeight: '300px', overflow: 'auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '4px 8px', fontSize: '11px', alignItems: 'center' }}>
+        <Card title={`Config — ${editingName}`}>
+          <div className="cfg-grid" style={{ maxHeight: 320, overflow: 'auto' }}>
             {renderConfigFields(nodeConfig, [], updateConfigField)}
           </div>
-          <div style={{ marginTop: '8px', display: 'flex', gap: '8px' }}>
-            <Button onClick={saveConfig} disabled={configSaving}>{configSaving ? 'Saving...' : 'Save'}</Button>
-            <Button onClick={() => setEditingNodeId(null)}>Cancel</Button>
+          <div className="row" style={{ gap: 8, marginTop: 12 }}>
+            <Button variant="primary" onClick={saveConfig} disabled={configSaving}>{configSaving ? 'Saving…' : 'Save'}</Button>
+            <Button variant="ghost" onClick={() => setEditingNodeId(null)}>Cancel</Button>
           </div>
-        </GroupBox>
+        </Card>
       )}
-      {editingNodeId && !nodeConfig && (
-        <div style={{ marginTop: '10px', padding: '10px', fontSize: '12px', color: '#666' }}>Loading config...</div>
-      )}
+      {editingNodeId && !nodeConfig && <div className="muted" style={{ padding: 10 }}>Loading config…</div>}
     </div>
   );
 }

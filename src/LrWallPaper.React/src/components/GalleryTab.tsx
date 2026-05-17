@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Button, Select, Checkbox, GroupBox } from 'react95';
-import type { Capture, Tag } from '../types';
-import { dateInputStyle, toOpts, MediaThumbnail } from '../utils';
+import type { Capture, Tag, FilterOptions } from '../types';
+import { toOpts, MediaThumbnail } from '../utils';
+import { Button, Select, Checkbox } from '../ui';
 import DetailModal from './DetailModal';
-import type { FilterOptions } from '../types';
 
 export default function GalleryTab() {
   const [selectedCapture, setSelectedCapture] = useState<Capture | null>(null);
@@ -91,92 +90,69 @@ export default function GalleryTab() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
-      <GroupBox label="Filters" style={{ flexShrink: 0, marginBottom: '8px' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <label style={{ fontSize: '11px' }}>Brand:</label>
-            <Select options={toOpts(filterOptions.cameraMakers)} value={selectedMaker}
-              onChange={(e) => setSelectedMaker(e.value as string)} width={130} menuMaxHeight={200} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <label style={{ fontSize: '11px' }}>Model:</label>
-            <Select options={toOpts(filterOptions.cameraModels)} value={selectedModel}
-              onChange={(e) => setSelectedModel(e.value as string)} width={160} menuMaxHeight={200} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <label style={{ fontSize: '11px' }}>Type:</label>
-            <Select options={toOpts(filterOptions.fileTypes)} value={selectedFileType}
-              onChange={(e) => setSelectedFileType(e.value as string)} width={90} menuMaxHeight={200} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <label style={{ fontSize: '11px' }}>Source:</label>
-            <Select options={toOpts(filterOptions.agentIds)} value={selectedAgent}
-              onChange={(e) => setSelectedAgent(e.value as string)} width={120} menuMaxHeight={200} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <label style={{ fontSize: '11px' }}>From:</label>
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={dateInputStyle} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <label style={{ fontSize: '11px' }}>To:</label>
-            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={dateInputStyle} />
-          </div>
+    <div className="col" style={{ flexGrow: 1, minHeight: 0, gap: 12 }}>
+      <div className="card" style={{ flexShrink: 0, padding: 12 }}>
+        <div className="toolbar">
+          <div className="field"><label>Brand</label>
+            <Select options={toOpts(filterOptions.cameraMakers)} value={selectedMaker} onChange={setSelectedMaker} width={130} /></div>
+          <div className="field"><label>Model</label>
+            <Select options={toOpts(filterOptions.cameraModels)} value={selectedModel} onChange={setSelectedModel} width={150} /></div>
+          <div className="field"><label>Type</label>
+            <Select options={toOpts(filterOptions.fileTypes)} value={selectedFileType} onChange={setSelectedFileType} width={90} /></div>
+          <div className="field"><label>Source</label>
+            <Select options={toOpts(filterOptions.agentIds)} value={selectedAgent} onChange={setSelectedAgent} width={120} /></div>
+          <div className="field"><label>From</label>
+            <input type="date" className="input" value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></div>
+          <div className="field"><label>To</label>
+            <input type="date" className="input" value={dateTo} onChange={e => setDateTo(e.target.value)} /></div>
           <Checkbox label="GPS" checked={hasGps} onChange={() => setHasGps(!hasGps)} />
-          <span style={{ borderLeft: '1px solid #808080', height: '20px', margin: '0 2px' }} />
+          <span className="sep" />
           <Button size="sm" active={mediaType === ''} onClick={() => setMediaType('')}>All</Button>
           <Button size="sm" active={mediaType === 'photo'} onClick={() => setMediaType('photo')}>Photos</Button>
           <Button size="sm" active={mediaType === 'video'} onClick={() => setMediaType('video')}>Videos</Button>
-          <span style={{ borderLeft: '1px solid #808080', height: '20px', margin: '0 2px' }} />
           {allTags.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <label style={{ fontSize: '11px' }}>Tag:</label>
-              <Select options={[{ label: 'All', value: '' as string | number }, ...allTags.map(t => ({ label: `${t.category ? t.category + '/' : ''}${t.name}`, value: t.id }))]}
-                value={selectedTagId} onChange={(e) => setSelectedTagId(e.value as number | '')} width={140} menuMaxHeight={200} />
-            </div>
+            <>
+              <span className="sep" />
+              <div className="field"><label>Tag</label>
+                <Select
+                  options={[{ label: 'All', value: '' }, ...allTags.map(t => ({ label: `${t.category ? t.category + '/' : ''}${t.name}`, value: t.id }))]}
+                  value={selectedTagId} onChange={v => setSelectedTagId(v ? Number(v) : '')} width={140} /></div>
+            </>
           )}
-          <Button size="sm" onClick={clearFilters}>Clear</Button>
+          <span className="spacer" />
+          <Button size="sm" variant="ghost" onClick={clearFilters}>Clear</Button>
         </div>
-      </GroupBox>
-
-      <div style={{ marginBottom: '6px', flexShrink: 0, fontSize: '12px' }}>
-        Showing {captures.length} files
       </div>
 
-      <div style={{ flexGrow: 1, minHeight: 0, width: '100%', overflow: 'auto', backgroundColor: '#fff', border: '2px inset #dfdfdf', padding: '10px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '12px' }}>
+      <div className="row" style={{ flexShrink: 0, justifyContent: 'space-between' }}>
+        <span className="muted" style={{ fontSize: 12 }}><strong style={{ color: 'var(--text)' }}>{captures.length}</strong> files</span>
+      </div>
+
+      <div className="tbl-wrap" style={{ padding: 14 }}>
+        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))' }}>
           {captures.map((pic, index) => {
             const isLast = index === captures.length - 1;
             const absolutePath = pic.fileFullPath || `${pic.filePath}\\${pic.fileName}`;
             const displayDate = pic.captureTime ? new Date(pic.captureTime).toLocaleString() : '';
             const imgSrc = `/api/image?path=${encodeURIComponent(absolutePath)}&agentId=${pic.agentId || 'local'}`;
-
             return (
-              <div
-                ref={isLast ? lastElementRef : null}
-                key={pic.id || `${pic.fileName}_${index}`}
-                style={{
-                  border: '2px solid #dfdfdf', borderBottomColor: '#808080', borderRightColor: '#808080',
-                  padding: '4px', textAlign: 'center', backgroundColor: '#c0c0c0', cursor: 'pointer'
-                }}
-                onClick={() => { setSelectedCapture(pic); setSelectedIndex(index); }}
-              >
-                <MediaThumbnail
-                  src={imgSrc} alt={pic.fileName}
-                  style={{ width: '100%', height: '160px', objectFit: 'cover', border: '2px inset #dfdfdf', backgroundColor: '#000' }}
-                />
-                <div style={{ fontSize: '11px', marginTop: '6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', padding: '2px' }}>
-                  {pic.fileName}
+              <div ref={isLast ? lastElementRef : null} key={pic.id || `${pic.fileName}_${index}`}
+                className="thumb" onClick={() => { setSelectedCapture(pic); setSelectedIndex(index); }}>
+                <MediaThumbnail src={imgSrc} alt={pic.fileName} className="thumb-img" />
+                <div className="thumb-meta">
+                  <div className="thumb-name">{pic.fileName}</div>
+                  {displayDate && <div className="thumb-sub">{displayDate}</div>}
+                  {pic.agentId && pic.agentId !== 'local' && (
+                    <div className="thumb-sub" style={{ color: 'var(--accent)' }}>Node {pic.agentId.substring(0, 8)}</div>
+                  )}
                 </div>
-                {displayDate && <div style={{ fontSize: '10px', color: '#666', marginTop: '2px' }}>{displayDate}</div>}
-                {pic.agentId && pic.agentId !== 'local' && <div style={{ fontSize: '10px', color: '#000080', marginTop: '2px' }}>Node: {pic.agentId.substring(0, 8)}</div>}
               </div>
             );
           })}
         </div>
-        {loading && <div style={{ padding: '20px', textAlign: 'center' }}>Loading please wait...</div>}
-        {!hasMore && captures.length > 0 && <div style={{ padding: '20px', textAlign: 'center' }}>No more pictures found.</div>}
-        {!loading && !hasMore && captures.length === 0 && <div style={{ padding: '20px', textAlign: 'center' }}>Your gallery is empty.</div>}
+        {loading && <div style={{ padding: 24, textAlign: 'center' }} className="muted">Loading…</div>}
+        {!hasMore && captures.length > 0 && <div style={{ padding: 24, textAlign: 'center' }} className="faint">— End —</div>}
+        {!loading && !hasMore && captures.length === 0 && <div style={{ padding: 40, textAlign: 'center' }} className="faint">Gallery is empty</div>}
       </div>
 
       {selectedCapture && (

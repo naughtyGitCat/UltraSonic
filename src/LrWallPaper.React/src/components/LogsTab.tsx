@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Button, Select, Checkbox } from 'react95';
 import type { Agent } from '../types';
+import { Button, Select, Checkbox } from '../ui';
 
 interface Props {
   agents: Agent[];
@@ -30,7 +30,7 @@ export default function LogsTab({ agents }: Props) {
       .finally(() => setLogLoading(false));
   }, [logNodeId, logType]);
 
-  useEffect(() => { fetchLogs(); }, []);
+  useEffect(() => { fetchLogs(); /* eslint-disable-next-line */ }, []);
 
   useEffect(() => {
     if (!logAutoRefresh) return;
@@ -39,39 +39,29 @@ export default function LogsTab({ agents }: Props) {
   }, [logAutoRefresh, fetchLogs]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
-        <label style={{ fontSize: '11px' }}>Node:</label>
-        <Select options={[
-          { label: 'Master (local)', value: 'local' },
-          ...agents.map(a => ({ label: `${a.name || a.id} (${a.endpoint})`, value: a.id }))
-        ]} value={logNodeId} onChange={(e) => { setLogNodeId(e.value as string); fetchLogs(e.value as string); }} width={200} menuMaxHeight={200} />
-        <label style={{ fontSize: '11px' }}>Type:</label>
-        <Select options={[
-          { label: 'All Logs', value: 'all' },
-          { label: 'Errors Only', value: 'error' },
-          ...(logNodeId !== 'local' ? [{ label: 'Scan Only', value: 'scan' }] : [])
-        ]} value={logType} onChange={(e) => { setLogType(e.value as string); fetchLogs(undefined, e.value as string); }} width={140} menuMaxHeight={200} />
-        <Button size="sm" onClick={() => fetchLogs()} disabled={logLoading}>
-          {logLoading ? 'Loading...' : 'Refresh'}
-        </Button>
-        <Checkbox label="Auto-refresh (5s)" checked={logAutoRefresh} onChange={() => setLogAutoRefresh(p => !p)} />
-        {logFile && <span style={{ fontSize: '10px', color: '#666' }}>File: {logFile} ({logLines.length} lines)</span>}
+    <div className="col" style={{ flexGrow: 1, minHeight: 0, gap: 12 }}>
+      <div className="toolbar" style={{ flexShrink: 0 }}>
+        <div className="field"><label>Node</label>
+          <Select options={[
+            { label: 'Master (local)', value: 'local' },
+            ...agents.map(a => ({ label: `${a.name || a.id}`, value: a.id }))
+          ]} value={logNodeId} onChange={v => { setLogNodeId(v); fetchLogs(v); }} width={200} /></div>
+        <div className="field"><label>Type</label>
+          <Select options={[
+            { label: 'All Logs', value: 'all' },
+            { label: 'Errors Only', value: 'error' },
+            ...(logNodeId !== 'local' ? [{ label: 'Scan Only', value: 'scan' }] : [])
+          ]} value={logType} onChange={v => { setLogType(v); fetchLogs(undefined, v); }} width={140} /></div>
+        <Button size="sm" onClick={() => fetchLogs()} disabled={logLoading}>{logLoading ? 'Loading…' : 'Refresh'}</Button>
+        <Checkbox label="Auto-refresh 5s" checked={logAutoRefresh} onChange={() => setLogAutoRefresh(p => !p)} />
+        <span className="spacer" />
+        {logFile && <span className="faint" style={{ fontSize: 11 }}>{logFile} · {logLines.length} lines</span>}
       </div>
-      <div style={{
-        flexGrow: 1, overflow: 'auto', border: '2px inset #dfdfdf', backgroundColor: '#000',
-        color: '#0f0', fontFamily: 'Consolas, "Courier New", monospace', fontSize: '11px',
-        padding: '6px', whiteSpace: 'pre', lineHeight: '1.4'
-      }}>
+      <div className="logbox">
         {logLines.map((line, i) => {
           const isErr = /\[ERR\]|\[FTL\]/.test(line);
           const isWarn = /\[WRN\]/.test(line);
-          return (
-            <div key={i} style={{
-              color: isErr ? '#ff4444' : isWarn ? '#ffaa00' : '#00ff00',
-              fontWeight: isErr ? 'bold' : 'normal'
-            }}>{line}</div>
-          );
+          return <div key={i} className={'log-line' + (isErr ? ' err' : isWarn ? ' warn' : '')}>{line}</div>;
         })}
         <div ref={logEndRef} />
       </div>
