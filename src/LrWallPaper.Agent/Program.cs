@@ -154,6 +154,7 @@ app.MapGet("/api/agent/archive-status", (AgentState agentState) => Results.Ok(ne
     isArchiving = agentState.IsArchiving,
     device = agentState.ArchiveDevice,
     currentFile = agentState.ArchiveCurrentFile,
+    phase = agentState.ArchivePhase,
     processed = agentState.ArchiveProcessed,
     startedAt = agentState.ArchiveStartedAt,
     lastArchiveEnd = agentState.LastArchiveEnd,

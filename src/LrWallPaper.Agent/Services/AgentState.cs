@@ -20,6 +20,7 @@ public class AgentState
     public bool IsArchiving { get; set; }
     public string? ArchiveDevice { get; set; }
     public string? ArchiveCurrentFile { get; set; }
+    public string? ArchivePhase { get; set; }   // "checking" (hashing + dedup) | "moving"
     public int ArchiveProcessed { get; set; }
     public DateTime? ArchiveStartedAt { get; set; }
     public DateTime? LastArchiveEnd { get; set; }

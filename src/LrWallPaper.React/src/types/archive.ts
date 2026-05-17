@@ -19,6 +19,7 @@ export interface ArchiveProgress {
   agentName: string;
   device?: string;
   currentFile?: string;
+  phase?: string;
   processed: number;
   startedAt?: string;
 }

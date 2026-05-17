@@ -110,6 +110,7 @@ public class MasterSyncController : ControllerBase
                         agentName = a.Name,
                         device = root.TryGetProperty("device", out var d) ? d.GetString() : null,
                         currentFile = root.TryGetProperty("currentFile", out var cf) ? cf.GetString() : null,
+                        phase = root.TryGetProperty("phase", out var ph) ? ph.GetString() : null,
                         processed = root.TryGetProperty("processed", out var p) ? p.GetInt32() : 0,
                         startedAt = root.TryGetProperty("startedAt", out var s) && s.ValueKind != System.Text.Json.JsonValueKind.Null ? s.GetDateTime() : (DateTime?)null
                     });

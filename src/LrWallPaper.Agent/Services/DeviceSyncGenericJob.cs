@@ -76,6 +76,7 @@ public class DeviceSyncGenericJob : BackgroundService
             _state.IsArchiving = true;
             _state.ArchiveDevice = deviceName;
             _state.ArchiveCurrentFile = null;
+            _state.ArchivePhase = "scanning";
             _state.ArchiveProcessed = 0;
             _state.ArchiveStartedAt = DateTime.Now;
             _state.NotifyStateChanged();
@@ -93,6 +94,7 @@ public class DeviceSyncGenericJob : BackgroundService
             {
                 _state.IsArchiving = false;
                 _state.ArchiveCurrentFile = null;
+                _state.ArchivePhase = null;
                 _state.LastArchiveEnd = DateTime.Now;
                 _state.LastArchiveCount = archiveRecords.Count;
                 _state.NotifyStateChanged();
@@ -142,6 +144,13 @@ public class DeviceSyncGenericJob : BackgroundService
 
         try
         {
+            // Mark the start of the expensive phase (hashing + dedup) so the
+            // progress UI is not blind while a multi-GB file is being hashed.
+            // Dedup order is unchanged: hash first, then compare.
+            _state.ArchiveCurrentFile = filename;
+            _state.ArchivePhase = "checking";
+            _state.NotifyStateChanged();
+
             var md5 = MediaHelpers.ComputeMD5(sourceFile);
 
             // Check Master for duplicate by MD5 via file-exists (filename + size)
@@ -173,7 +182,8 @@ public class DeviceSyncGenericJob : BackgroundService
             }
 
             _logger.LogInformation("Importing ({Mode}) {Source} → {Target}", transferMode, sourceFile, targetFile);
-            _state.ArchiveCurrentFile = filename;
+            _state.ArchivePhase = "moving";
+            _state.NotifyStateChanged();
             Directory.CreateDirectory(targetDir);
             if (transferMode == "move")
                 File.Move(sourceFile, targetFile, overwrite: false);
