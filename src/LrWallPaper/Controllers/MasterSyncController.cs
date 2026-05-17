@@ -9,11 +9,13 @@ public class MasterSyncController : ControllerBase
 {
     private readonly FileMD5Manager _md5Manager;
     private readonly MasterReplicationService _replicationService;
+    private readonly AgentManager _agentManager;
 
-    public MasterSyncController(FileMD5Manager md5Manager, MasterReplicationService replicationService)
+    public MasterSyncController(FileMD5Manager md5Manager, MasterReplicationService replicationService, AgentManager agentManager)
     {
         _md5Manager = md5Manager;
         _replicationService = replicationService;
+        _agentManager = agentManager;
     }
 
     [HttpGet("file-exists")]
@@ -85,6 +87,37 @@ public class MasterSyncController : ControllerBase
             parameters.Concat(new object[] { pageSize, (page - 1) * pageSize }).ToArray());
 
         return Ok(new { total, page, pageSize, items });
+    }
+
+    [HttpGet("archive-progress")]
+    public async Task<IActionResult> GetArchiveProgress()
+    {
+        var agents = await _agentManager.GetAllAgentsAsync();
+        using var client = new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(3) };
+        var active = new List<object>();
+        foreach (var a in agents)
+        {
+            try
+            {
+                var resp = await client.GetStringAsync($"{a.Endpoint.TrimEnd('/')}/api/agent/archive-status");
+                using var doc = System.Text.Json.JsonDocument.Parse(resp);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("isArchiving", out var ia) && ia.GetBoolean())
+                {
+                    active.Add(new
+                    {
+                        agentId = a.Id,
+                        agentName = a.Name,
+                        device = root.TryGetProperty("device", out var d) ? d.GetString() : null,
+                        currentFile = root.TryGetProperty("currentFile", out var cf) ? cf.GetString() : null,
+                        processed = root.TryGetProperty("processed", out var p) ? p.GetInt32() : 0,
+                        startedAt = root.TryGetProperty("startedAt", out var s) && s.ValueKind != System.Text.Json.JsonValueKind.Null ? s.GetDateTime() : (DateTime?)null
+                    });
+                }
+            }
+            catch { /* agent unreachable / no archive endpoint */ }
+        }
+        return Ok(new { active });
     }
 
     [HttpGet("archive-history/stats")]

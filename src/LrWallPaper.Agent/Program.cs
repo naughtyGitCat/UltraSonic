@@ -149,6 +149,17 @@ app.MapGet("/api/agent/scan-status", (AgentState agentState) => Results.Ok(new
     lastError = agentState.LastError
 }));
 
+app.MapGet("/api/agent/archive-status", (AgentState agentState) => Results.Ok(new
+{
+    isArchiving = agentState.IsArchiving,
+    device = agentState.ArchiveDevice,
+    currentFile = agentState.ArchiveCurrentFile,
+    processed = agentState.ArchiveProcessed,
+    startedAt = agentState.ArchiveStartedAt,
+    lastArchiveEnd = agentState.LastArchiveEnd,
+    lastArchiveCount = agentState.LastArchiveCount
+}));
+
 app.MapGet("/api/agent/version", () =>
 {
     var asm = System.Reflection.Assembly.GetExecutingAssembly();

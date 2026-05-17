@@ -611,3 +611,17 @@ table.tbl tbody tr.row-click { cursor: pointer; }
   cursor: pointer;
 }
 .theme-toggle button.on { background: var(--accent-soft); color: var(--accent); }
+
+.pulse-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 0 var(--accent-border);
+  animation: pulse 1.5s infinite;
+  flex-shrink: 0;
+}
+@keyframes pulse {
+  0%   { box-shadow: 0 0 0 0 var(--accent-border); }
+  70%  { box-shadow: 0 0 0 8px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}

@@ -11,12 +11,14 @@ public class DeviceSyncGenericJob : BackgroundService
 {
     private readonly ILogger<DeviceSyncGenericJob> _logger;
     private readonly IConfiguration _configuration;
+    private readonly AgentState _state;
     private readonly HttpClient _httpClient = new();
 
-    public DeviceSyncGenericJob(ILogger<DeviceSyncGenericJob> logger, IConfiguration configuration)
+    public DeviceSyncGenericJob(ILogger<DeviceSyncGenericJob> logger, IConfiguration configuration, AgentState state)
     {
         _logger = logger;
         _configuration = configuration;
+        _state = state;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -70,12 +72,31 @@ public class DeviceSyncGenericJob : BackgroundService
             _logger.LogInformation("Found removable device with DCIM at: {Path} (label: {Label})", dcimPath, deviceName);
             var batch = new List<object>();
             var archiveRecords = new List<object>();
-            await ProcessDirectoryAsync(dcimPath, masterEndpoint, agentId, archiveDir, transferMode, deviceName, batch, archiveRecords, ct);
 
-            if (batch.Count > 0)
-                await PushBatchAsync(masterEndpoint, batch, ct);
-            if (archiveRecords.Count > 0)
-                await PushArchiveHistoryAsync(masterEndpoint, archiveRecords, ct);
+            _state.IsArchiving = true;
+            _state.ArchiveDevice = deviceName;
+            _state.ArchiveCurrentFile = null;
+            _state.ArchiveProcessed = 0;
+            _state.ArchiveStartedAt = DateTime.Now;
+            _state.NotifyStateChanged();
+
+            try
+            {
+                await ProcessDirectoryAsync(dcimPath, masterEndpoint, agentId, archiveDir, transferMode, deviceName, batch, archiveRecords, ct);
+
+                if (batch.Count > 0)
+                    await PushBatchAsync(masterEndpoint, batch, ct);
+                if (archiveRecords.Count > 0)
+                    await PushArchiveHistoryAsync(masterEndpoint, archiveRecords, ct);
+            }
+            finally
+            {
+                _state.IsArchiving = false;
+                _state.ArchiveCurrentFile = null;
+                _state.LastArchiveEnd = DateTime.Now;
+                _state.LastArchiveCount = archiveRecords.Count;
+                _state.NotifyStateChanged();
+            }
         }
     }
 
@@ -152,11 +173,14 @@ public class DeviceSyncGenericJob : BackgroundService
             }
 
             _logger.LogInformation("Importing ({Mode}) {Source} → {Target}", transferMode, sourceFile, targetFile);
+            _state.ArchiveCurrentFile = filename;
             Directory.CreateDirectory(targetDir);
             if (transferMode == "move")
                 File.Move(sourceFile, targetFile, overwrite: false);
             else
                 File.Copy(sourceFile, targetFile, overwrite: false);
+            _state.ArchiveProcessed++;
+            _state.NotifyStateChanged();
 
             batch.Add(new
             {

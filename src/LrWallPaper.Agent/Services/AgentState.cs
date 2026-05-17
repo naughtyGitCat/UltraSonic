@@ -16,6 +16,15 @@ public class AgentState
     public DateTime? NextScanTime { get; set; }
     public string? LastError { get; set; }
 
+    // Device archive (DeviceSyncGenericJob) progress tracking
+    public bool IsArchiving { get; set; }
+    public string? ArchiveDevice { get; set; }
+    public string? ArchiveCurrentFile { get; set; }
+    public int ArchiveProcessed { get; set; }
+    public DateTime? ArchiveStartedAt { get; set; }
+    public DateTime? LastArchiveEnd { get; set; }
+    public int LastArchiveCount { get; set; }
+
     private readonly ManualResetEventSlim _rescanSignal = new(false);
 
     public event EventHandler? StateChanged;

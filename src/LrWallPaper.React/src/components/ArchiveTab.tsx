@@ -1,14 +1,16 @@
-import { useState, useEffect } from 'react';
-import type { ArchiveRecord, ArchiveStats } from '../types';
+import { useState, useEffect, useRef } from 'react';
+import type { ArchiveRecord, ArchiveStats, ArchiveProgress } from '../types';
 import { formatFileSize } from '../utils';
 import { Button, Card, Badge } from '../ui';
 
 export default function ArchiveTab() {
   const [stats, setStats] = useState<ArchiveStats | null>(null);
   const [records, setRecords] = useState<ArchiveRecord[]>([]);
+  const [progress, setProgress] = useState<ArchiveProgress[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const pageSize = 50;
+  const wasActive = useRef(false);
 
   const fetchData = (p = page) => {
     fetch(`/api/master/archive-history?page=${p}&pageSize=${pageSize}`)
@@ -20,11 +22,59 @@ export default function ArchiveTab() {
 
   useEffect(() => { fetchData(); /* eslint-disable-next-line */ }, []);
 
+  useEffect(() => {
+    let alive = true;
+    const poll = () => {
+      fetch('/api/master/archive-progress')
+        .then(r => r.json())
+        .then((d: { active: ArchiveProgress[] }) => {
+          if (!alive) return;
+          const act = d.active || [];
+          setProgress(act);
+          // refresh history/stats when an in-progress run just finished
+          if (wasActive.current && act.length === 0) fetchData(1);
+          wasActive.current = act.length > 0;
+        })
+        .catch(() => {});
+    };
+    poll();
+    const id = setInterval(poll, 3000);
+    return () => { alive = false; clearInterval(id); };
+    /* eslint-disable-next-line */
+  }, []);
+
   const totalPages = Math.ceil(total / pageSize);
   const trunc = (s: string, n: number, end = false) => s.length <= n ? s : (end ? '…' + s.slice(-n) : s.slice(0, n) + '…');
+  const elapsed = (iso?: string) => {
+    if (!iso) return '';
+    const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+    return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+  };
 
   return (
     <div className="col scroll-y" style={{ flexGrow: 1, gap: 14 }}>
+      {progress.length > 0 && (
+        <div className="card" style={{ borderColor: 'var(--accent-border)', background: 'var(--accent-soft)' }}>
+          <div className="row" style={{ gap: 8, marginBottom: 10 }}>
+            <span className="pulse-dot" />
+            <strong style={{ color: 'var(--accent)' }}>Archiving in progress</strong>
+          </div>
+          <div className="col" style={{ gap: 10 }}>
+            {progress.map(p => (
+              <div key={p.agentId} className="row wrap" style={{ gap: 16, fontSize: 12 }}>
+                <Badge kind="accent">{p.agentName}</Badge>
+                <span><span className="muted">Device</span> <strong>{p.device || '-'}</strong></span>
+                <span><span className="muted">Archived</span> <strong>{p.processed}</strong></span>
+                <span><span className="muted">Elapsed</span> <strong>{elapsed(p.startedAt)}</strong></span>
+                <span style={{ flex: 1, minWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span className="muted">Current</span> {p.currentFile || '…'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <Card title="Archive Statistics">
         {stats ? (
           <div className="stats">

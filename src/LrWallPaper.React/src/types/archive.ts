@@ -14,6 +14,15 @@ export interface ArchiveRecord {
   archivedAt: string;
 }
 
+export interface ArchiveProgress {
+  agentId: string;
+  agentName: string;
+  device?: string;
+  currentFile?: string;
+  processed: number;
+  startedAt?: string;
+}
+
 export interface ArchiveStats {
   total: number;
   totalSize: number;
