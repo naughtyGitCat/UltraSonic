@@ -159,7 +159,13 @@ public class AgentController : ControllerBase
             var files = Directory.GetFiles(logDir, $"{prefix}*.txt").OrderByDescending(f => f).ToList();
             if (files.Count == 0) return Ok(new { lines = Array.Empty<string>(), file = "" });
 
-            var allLines = System.IO.File.ReadAllLines(files[0]);
+            // Use FileShare.ReadWrite to avoid locking conflict with Serilog
+            string[] allLines;
+            using (var fs = new FileStream(files[0], FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (var reader = new StreamReader(fs))
+            {
+                allLines = reader.ReadToEnd().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            }
             var result = allLines.Length > maxLines ? allLines[^maxLines..] : allLines;
             return Ok(new { lines = result, file = Path.GetFileName(files[0]), totalFiles = files.Count, availableTypes = new[] { "all", "error" } });
         }

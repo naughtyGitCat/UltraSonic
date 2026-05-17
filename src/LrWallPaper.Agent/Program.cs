@@ -181,7 +181,13 @@ app.MapGet("/api/agent/logs", (string? type, int? lines) =>
         return Results.Ok(new { lines = Array.Empty<string>(), file = "" });
 
     var latestFile = files[0];
-    var allLines = File.ReadAllLines(latestFile);
+    // Use FileShare.ReadWrite to avoid locking conflict with Serilog
+    string[] allLines;
+    using (var fs = new FileStream(latestFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+    using (var reader = new StreamReader(fs))
+    {
+        allLines = reader.ReadToEnd().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+    }
     var result = allLines.Length > maxLines
         ? allLines[^maxLines..]
         : allLines;
