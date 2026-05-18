@@ -26,18 +26,22 @@ Start-Process powershell -Verb RunAs -ArgumentList `
 
 ## Z690 (Agent only, started by a Scheduled Task) — via WinRM
 
+`Invoke-Command -FilePath ... -ArgumentList` binds **positionally**
+and cannot pass named parameters. Stage the script + binaries on
+Z690 and invoke it inside a script block with named args:
+
 ```powershell
 $s = New-PSSession -ComputerName Z690
-# stage new binaries (appsettings.json is preserved by the script)
-Copy-Item "$env:TEMP\publish-agent\*" 'C:\Program Files\UltraSonic\LrWallPaper.Agent\.deploy-staging\' -ToSession $s -Recurse -Force
-Invoke-Command -Session $s -FilePath E:\Code\UltraSonic\deploy\deploy.ps1 -ArgumentList `
-  '-Component','Agent','-PublishAgent','C:\Program Files\UltraSonic\LrWallPaper.Agent\.deploy-staging',`
-  '-AgentStart','ScheduledTask'
+Invoke-Command -Session $s -ScriptBlock { New-Item -ItemType Directory -Force 'C:\Temp\publish-agent' | Out-Null }
+Copy-Item "$env:TEMP\publish-agent\*" 'C:\Temp\publish-agent\' -ToSession $s -Recurse -Force
+Copy-Item 'E:\Code\UltraSonic\deploy\deploy.ps1' 'C:\Temp\deploy.ps1' -ToSession $s -Force
+Invoke-Command -Session $s -ScriptBlock {
+  & 'C:\Temp\deploy.ps1' -Component Agent -PublishAgent 'C:\Temp\publish-agent' -AgentStart ScheduledTask
+}
 Remove-PSSession $s
 ```
 
-(Or copy `publish-agent` to a temp dir on Z690 and pass it as
-`-PublishAgent`; the script preserves `appsettings.json` and `logs/`.)
+The script preserves `appsettings.json` and `logs/` across the sync.
 
 ## Safety caps
 
