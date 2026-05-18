@@ -38,10 +38,19 @@ public class AgentState
 
     public void TriggerRescan() => _rescanSignal.Set();
 
-    public bool WaitForRescan(TimeSpan timeout)
+    public bool WaitForRescan(TimeSpan timeout, CancellationToken ct = default)
     {
-        var triggered = _rescanSignal.Wait(timeout);
-        if (triggered) _rescanSignal.Reset();
-        return triggered;
+        try
+        {
+            // Cancellation-aware: a shutdown unblocks this immediately
+            // instead of the host hanging up to the full scan interval.
+            var triggered = _rescanSignal.Wait(timeout, ct);
+            if (triggered) _rescanSignal.Reset();
+            return triggered;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
     }
 }

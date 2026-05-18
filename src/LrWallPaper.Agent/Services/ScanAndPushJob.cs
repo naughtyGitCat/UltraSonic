@@ -81,6 +81,7 @@ public class ScanAndPushJob : BackgroundService
 
             foreach (var scanPath in scanPaths)
             {
+                if (stoppingToken.IsCancellationRequested) break;
                 if (!Directory.Exists(scanPath))
                 {
                     _logger.LogWarning("Scan path does not exist, skipping: {Path}", scanPath);
@@ -162,7 +163,12 @@ public class ScanAndPushJob : BackgroundService
                 _agentState.LastScanDuration?.ToString(@"hh\:mm\:ss"), _agentState.NextScanTime?.ToString("HH:mm:ss"));
 
             // Wait for scheduled interval or manual rescan trigger
-            _agentState.WaitForRescan(TimeSpan.FromMinutes(intervalMinutes));
+            _agentState.WaitForRescan(TimeSpan.FromMinutes(intervalMinutes), stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                _logger.LogInformation("ScanAndPushJob stopped gracefully.");
+                break;
             }
             catch (Exception ex)
             {
@@ -170,7 +176,7 @@ public class ScanAndPushJob : BackgroundService
                 _agentState.IsScanning = false;
                 _agentState.LastError = ex.Message;
                 _agentState.NextScanTime = DateTime.Now.AddSeconds(60);
-                _agentState.WaitForRescan(TimeSpan.FromSeconds(60));
+                _agentState.WaitForRescan(TimeSpan.FromSeconds(60), stoppingToken);
             }
         }
     }
