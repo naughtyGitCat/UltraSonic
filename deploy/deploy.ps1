@@ -84,13 +84,13 @@ function Stop-AgentGracefully {
   $p = Get-Proc $AgentExe
   if (-not $p) { Log "Agent not running."; return }
 
-  Log "Requesting graceful Agent shutdown ($AgentBaseUrl/api/agent/shutdown)…"
+  Log "Requesting graceful Agent shutdown ($AgentBaseUrl/api/agent/shutdown)..."
   $sd = Invoke-AgentApi '/api/agent/shutdown' 'POST'
 
   if ($sd.Ok) {
-    Log "Shutdown accepted. Waiting for process to exit (in-flight move finishes first)…"
+    Log "Shutdown accepted. Waiting for process to exit (in-flight move finishes first)..."
     if (Wait-ProcExit $AgentExe $GracefulExitTimeout) { Log "Agent exited gracefully."; return }
-    Write-Warning "Agent did not exit within ${GracefulExitTimeout}s — forcing (LAST RESORT, possible truncation)."
+    Write-Warning "Agent did not exit within ${GracefulExitTimeout}s - forcing (LAST RESORT, possible truncation)."
     Get-Proc $AgentExe | Stop-Process -Force; Start-Sleep 2; return
   }
 
@@ -103,12 +103,12 @@ function Stop-AgentGracefully {
       $st = $null
       $cur = Invoke-AgentApi '/api/agent/archive-status'
       if ($cur.Ok) { try { $st = $cur.Body | ConvertFrom-Json } catch { } }
-      if (-not $st -or -not $st.isArchiving) { Log "Archive idle — safe to stop."; break }
-      Log "Archiving ($($st.device), phase=$($st.phase)) — waiting for safe boundary…"
+      if (-not $st -or -not $st.isArchiving) { Log "Archive idle - safe to stop."; break }
+      Log "Archiving ($($st.device), phase=$($st.phase)) - waiting for safe boundary..."
       Start-Sleep 20
     }
   } else {
-    Log "No archive-status either — very old build, plain stop is acceptable."
+    Log "No archive-status either - very old build, plain stop is acceptable."
   }
   Get-Proc $AgentExe | Stop-Process -Force; Start-Sleep 2
 }
@@ -116,7 +116,7 @@ function Stop-AgentGracefully {
 function Stop-MasterPlain {
   $p = Get-Proc $MasterExe
   if (-not $p) { Log "Master not running."; return }
-  Log "Stopping Master (no risky I/O; SQLite is transactional)…"
+  Log "Stopping Master (no risky I/O; SQLite is transactional)..."
   $p | Stop-Process -Force; Start-Sleep 2
 }
 
@@ -129,10 +129,10 @@ function Sync-Dir($src, $dst, [string[]]$xf) {
 
 function Start-AgentProc {
   if ($AgentStart -eq 'ScheduledTask') {
-    Log "Starting Agent via scheduled task '$ScheduledTaskName'…"
+    Log "Starting Agent via scheduled task '$ScheduledTaskName'..."
     Start-ScheduledTask -TaskName $ScheduledTaskName
   } else {
-    Log "Starting Agent process…"
+    Log "Starting Agent process..."
     Start-Process -FilePath (Join-Path $InstallAgent $AgentExe) -WorkingDirectory $InstallAgent
   }
 }
@@ -145,16 +145,16 @@ if ($doAgent)  { Stop-AgentGracefully }
 if ($doMaster) { Stop-MasterPlain }
 
 if ($doMaster) {
-  Log "Syncing Master files…"
+  Log "Syncing Master files..."
   Sync-Dir $PublishMaster $InstallMaster @('ultrasonic.db')
 }
 if ($doAgent) {
-  Log "Syncing Agent files (preserving appsettings.json)…"
+  Log "Syncing Agent files (preserving appsettings.json)..."
   Sync-Dir $PublishAgent $InstallAgent @('appsettings.json')
 }
 
 if ($doMaster) {
-  Log "Starting Master…"
+  Log "Starting Master..."
   Start-Process -FilePath (Join-Path $InstallMaster $MasterExe) -WorkingDirectory $InstallMaster
 }
 if ($doAgent) { Start-AgentProc }
