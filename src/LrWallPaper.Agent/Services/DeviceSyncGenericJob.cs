@@ -167,22 +167,27 @@ public class DeviceSyncGenericJob : BackgroundService
 
         try
         {
-            // Mark the start of the expensive phase (hashing + dedup) so the
-            // progress UI is not blind while a multi-GB file is being hashed.
-            // Dedup order is unchanged: hash first, then compare.
+            // Cheap dedup precheck FIRST (filename + size only, no hashing).
+            // Already-archived files are skipped without ever reading their
+            // multi-GB contents — this is what stops every scan cycle from
+            // re-hashing the whole device.
             _state.ArchiveCurrentFile = filename;
             _state.ArchivePhase = "checking";
             _state.NotifyStateChanged();
 
-            var md5 = MediaHelpers.ComputeMD5(sourceFile);
-
-            // Check Master for duplicate by MD5 via file-exists (filename + size)
             var size = new FileInfo(sourceFile).Length;
             if (await FileExistsOnMasterAsync(masterEndpoint, filename, size))
             {
                 _logger.LogDebug("Already on Master, skipping: {File}", sourceFile);
                 return;
             }
+
+            // Confirmed new -> now (and only now) hash it. MD5 is needed for
+            // the target-collision content compare and the catalog/history
+            // records below.
+            _state.ArchivePhase = "hashing";
+            _state.NotifyStateChanged();
+            var md5 = MediaHelpers.ComputeMD5(sourceFile);
 
             var exif = MediaHelpers.ReadExif(sourceFile);
             var captureTime = exif.PhotoDateTime ?? File.GetCreationTime(sourceFile);

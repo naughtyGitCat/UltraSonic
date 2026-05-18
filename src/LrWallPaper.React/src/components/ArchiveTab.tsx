@@ -83,7 +83,7 @@ export default function ArchiveTab() {
               <div key={p.agentId} className="row wrap" style={{ gap: 16, fontSize: 12 }}>
                 <Badge kind="accent">{p.agentName}</Badge>
                 <span><span className="muted">Device</span> <strong>{p.device || '-'}</strong></span>
-                {p.phase && <Badge>{p.phase === 'checking' ? 'Hashing / dedup' : p.phase === 'moving' ? 'Moving' : p.phase === 'scanning' ? 'Scanning' : p.phase}</Badge>}
+                {p.phase && <Badge>{p.phase === 'checking' ? 'Dedup check' : p.phase === 'hashing' ? 'Hashing' : p.phase === 'moving' ? 'Moving' : p.phase === 'scanning' ? 'Scanning' : p.phase}</Badge>}
                 <span><span className="muted">Archived</span> <strong>{p.processed}</strong></span>
                 <span><span className="muted">Elapsed</span> <strong>{elapsed(p.startedAt)}</strong></span>
                 <span style={{ flex: 1, minWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
