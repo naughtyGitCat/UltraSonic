@@ -178,6 +178,17 @@ public class DeviceSyncGenericJob : BackgroundService
             var size = new FileInfo(sourceFile).Length;
             if (await FileExistsOnMasterAsync(masterEndpoint, filename, size))
             {
+                // Already archived. In move mode the source must not be left
+                // stranded on the device — "move" semantics apply to
+                // already-archived files too. Only delete the source after
+                // content-verifying a local archived copy (never delete on
+                // filename+size alone; a corrupt/partial archive must NOT
+                // cost us the only good original).
+                if (transferMode == "move"
+                    && TryReclaimArchivedSource(sourceFile, filename, size, archiveDir))
+                {
+                    return;
+                }
                 _logger.LogDebug("Already on Master, skipping: {File}", sourceFile);
                 return;
             }
@@ -311,6 +322,57 @@ public class DeviceSyncGenericJob : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to push archive history to Master");
+        }
+    }
+
+    /// <summary>
+    /// The file is already on Master but still physically on the source
+    /// device (move mode). Find a local archived copy and, only if its
+    /// content matches (MD5), delete the source so nothing is stranded.
+    /// Returns true iff the source was safely deleted. A one-time hash
+    /// cost per file: once deleted it is never re-checked again.
+    /// </summary>
+    private bool TryReclaimArchivedSource(string sourceFile, string filename, long size, string archiveDir)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(archiveDir) || !Directory.Exists(archiveDir)) return false;
+
+            string[] candidates;
+            try { candidates = Directory.GetFiles(archiveDir, filename, SearchOption.AllDirectories); }
+            catch { return false; }
+
+            var sameSize = candidates.Where(c =>
+            {
+                try { return new FileInfo(c).Length == size; } catch { return false; }
+            }).ToList();
+            if (sameSize.Count == 0) return false;
+
+            _state.ArchivePhase = "reclaiming";
+            _state.NotifyStateChanged();
+
+            var srcMd5 = MediaHelpers.ComputeMD5(sourceFile);
+            foreach (var cand in sameSize)
+            {
+                string candMd5;
+                try { candMd5 = MediaHelpers.ComputeMD5(cand); } catch { continue; }
+                if (candMd5 == srcMd5)
+                {
+                    File.Delete(sourceFile);
+                    _logger.LogInformation("Reclaimed already-archived source (verified == {Archived}): deleted {Src}",
+                        cand, sourceFile);
+                    return true;
+                }
+            }
+            // Archived copy exists by name+size but content differs: the
+            // archive is corrupt/partial. Keep the source untouched.
+            _logger.LogWarning("Already on Master but no content-verified local copy for {File} — source kept.", sourceFile);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Reclaim check failed for {File} — source kept.", sourceFile);
+            return false;
         }
     }
 
