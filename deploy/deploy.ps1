@@ -24,9 +24,18 @@
   The Master has no risky file I/O (SQLite is transactional), so it
   is simply stopped and restarted.
 
+  Boot autostart is institutionalized: every deploy idempotently
+  (re)creates a per-component Scheduled Task (AtStartup + AtLogon,
+  Interactive + Highest, restart-on-failure) and removes the legacy
+  fragile HKCU\Run entry. The app is both started-now and started-at-
+  boot through the same task, so "how it runs now" == "how it comes
+  back after a reboot".
+
 .NOTES
-  Run elevated (writes under C:\Program Files). Machine-local: run it
-  on the box being deployed (for Z690 invoke it via WinRM).
+  Run elevated (writes under C:\Program Files, registers tasks).
+  Machine-local: run it on the box being deployed (for Z690 invoke
+  it via WinRM). Default principal is the current user ($env:USERNAME);
+  override with -RunAsUser when deploying remotely as a different user.
 #>
 [CmdletBinding()]
 param(
@@ -42,10 +51,12 @@ param(
   [string]$MasterExe     = 'LrWallPaper.exe',
   [string]$AgentExe      = 'LrWallPaper.Agent.exe',
 
-  # How the Agent is launched on this host
-  [ValidateSet('Process', 'ScheduledTask')]
-  [string]$AgentStart    = 'Process',
-  [string]$ScheduledTaskName = 'UltraSonic Agent',
+  # Boot autostart is a per-component Scheduled Task (AtStartup + AtLogon,
+  # Interactive + Highest). A Windows Service is intentionally NOT used:
+  # these are WinExe + WinForms tray apps and fail in Session 0.
+  [string]$MasterTaskName = 'UltraSonic Master',
+  [string]$AgentTaskName  = 'UltraSonic Agent',
+  [string]$RunAsUser      = "$env:USERNAME",
 
   # Hard caps (seconds)
   [int]$GracefulExitTimeout = 900,   # wait for process exit after /shutdown (covers a big in-flight move)
@@ -127,14 +138,40 @@ function Sync-Dir($src, $dst, [string[]]$xf) {
   if ($LASTEXITCODE -ge 8) { throw "robocopy failed ($LASTEXITCODE): $src -> $dst" }
 }
 
-function Start-AgentProc {
-  if ($AgentStart -eq 'ScheduledTask') {
-    Log "Starting Agent via scheduled task '$ScheduledTaskName'..."
-    Start-ScheduledTask -TaskName $ScheduledTaskName
-  } else {
-    Log "Starting Agent process..."
-    Start-Process -FilePath (Join-Path $InstallAgent $AgentExe) -WorkingDirectory $InstallAgent
+# Idempotently (re)create the boot-autostart task for a component.
+# Triggers: AtStartup (covers autologon hosts) + AtLogon (covers manual
+# login). Interactive + Highest so the tray works and it can bind ports
+# / write under Program Files. RestartCount gives service-like crash
+# recovery without Session 0.
+function Ensure-AutostartTask([string]$name, [string]$exePath, [string]$workDir) {
+  Log "Ensuring autostart task '$name'..."
+  $action  = New-ScheduledTaskAction -Execute $exePath -WorkingDirectory $workDir
+  $trigBoot  = New-ScheduledTaskTrigger -AtStartup
+  $trigLogon = New-ScheduledTaskTrigger -AtLogOn -User $RunAsUser
+  $principal = New-ScheduledTaskPrincipal -UserId $RunAsUser -LogonType Interactive -RunLevel Highest
+  $settings  = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+                 -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) `
+                 -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
+  Register-ScheduledTask -TaskName $name -Action $action -Trigger $trigBoot, $trigLogon `
+    -Principal $principal -Settings $settings -Force | Out-Null
+}
+
+# Drop the fragile per-user HKCU\Run entry (login-only, double-start risk).
+function Remove-LegacyRunEntry {
+  foreach ($n in 'LrWallPaperAgent', 'LrWallPaper', 'UltraSonicAgent') {
+    try {
+      $k = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+      if (Get-ItemProperty -Path $k -Name $n -ErrorAction SilentlyContinue) {
+        Remove-ItemProperty -Path $k -Name $n -Force
+        Log "Removed legacy HKCU\Run entry '$n'."
+      }
+    } catch { }
   }
+}
+
+function Start-Component([string]$taskName) {
+  Log "Starting via task '$taskName'..."
+  Start-ScheduledTask -TaskName $taskName
 }
 
 # ---- orchestration ----
@@ -153,11 +190,16 @@ if ($doAgent) {
   Sync-Dir $PublishAgent $InstallAgent @('appsettings.json')
 }
 
+Remove-LegacyRunEntry
+
 if ($doMaster) {
-  Log "Starting Master..."
-  Start-Process -FilePath (Join-Path $InstallMaster $MasterExe) -WorkingDirectory $InstallMaster
+  Ensure-AutostartTask $MasterTaskName (Join-Path $InstallMaster $MasterExe) $InstallMaster
+  Start-Component $MasterTaskName
 }
-if ($doAgent) { Start-AgentProc }
+if ($doAgent) {
+  Ensure-AutostartTask $AgentTaskName (Join-Path $InstallAgent $AgentExe) $InstallAgent
+  Start-Component $AgentTaskName
+}
 
 Start-Sleep 5
 if ($doMaster) {
