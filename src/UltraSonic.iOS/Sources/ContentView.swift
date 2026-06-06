@@ -65,7 +65,8 @@ struct ContentView: View {
 
                     HStack {
                         stat("Uploaded", engine.uploaded, .green)
-                        stat("Skipped", engine.skipped, .secondary)
+                        stat("On server", engine.skippedExisting, .secondary)
+                        stat("Filtered", engine.skippedFiltered, .secondary)
                         stat("Failed", engine.failed, .red)
                     }
 
