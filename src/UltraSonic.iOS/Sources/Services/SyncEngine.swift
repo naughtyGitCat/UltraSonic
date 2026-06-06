@@ -95,6 +95,18 @@ final class SyncEngine: ObservableObject {
             }.value
             if units.isEmpty { failed += 1; frozen = true; processed += 1; continue }
 
+            // Only upload this-device captures. .typeUserLibrary means "in your library",
+            // NOT "shot here" — it still includes AirDrop'd / third-party-app saves /
+            // downloads (e.g. "image-2025-09-06-10:01:24-114.jpg"). Apple camera captures
+            // are IMG_####.{HEIC,JPG,MOV} (incl. edited IMG_E####). Cheap pre-transfer gate,
+            // matching the AFC path's EXIF "shot by this device" intent.
+            if let primary = units.first?.originalFilename, !Self.isDeviceCapture(primary) {
+                skipped += 1
+                if !frozen { advance(&safeMark, asset.creationDate) }
+                processed += 1
+                continue
+            }
+
             var assetOK = true
             for media in units {
                 if Task.isCancelled { break outer }
@@ -169,6 +181,13 @@ final class SyncEngine: ObservableObject {
             status = "Done — \(uploaded) uploaded, \(skipped) skipped, \(failed) failed"
             append("✅ \(status)")
         }
+    }
+
+    /// True if the filename looks like an Apple on-device camera capture (IMG_1234.HEIC,
+    /// edited IMG_E1234, Live Photo IMG_1234.MOV…). Excludes AirDrop'd / third-party /
+    /// downloaded saves that also live in .typeUserLibrary but carry other names.
+    static func isDeviceCapture(_ filename: String) -> Bool {
+        filename.uppercased().hasPrefix("IMG_")
     }
 
     private func advance(_ mark: inout Date?, _ date: Date?) {
