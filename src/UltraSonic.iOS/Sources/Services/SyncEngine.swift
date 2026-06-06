@@ -50,6 +50,15 @@ final class SyncEngine: ObservableObject {
         let client = MasterClient(baseURL: settings.masterEndpoint)
         let mark = settings.highWaterMark
 
+        // Fail fast: if Master is unreachable, abort before scanning instead of
+        // failing every asset one by one.
+        status = "Checking Master…"
+        guard await client.health() else {
+            status = "Master unreachable — check the server address"
+            append("❌ Master unreachable at \(settings.masterEndpoint) — sync aborted")
+            return
+        }
+
         status = "Scanning library…"
         let assets = photos.fetchNewCameraAssets(since: mark)
         total = assets.count
