@@ -8,8 +8,9 @@ import Photos
 final class SyncEngine: ObservableObject {
     @Published var isRunning = false
     @Published var status = "Idle"
-    @Published var total = 0
-    @Published var uploaded = 0
+    @Published var total = 0        // assets to consider (a Live Photo is one asset, two files)
+    @Published var processed = 0    // assets finished, drives the progress bar
+    @Published var uploaded = 0     // files uploaded (Live Photo = 2)
     @Published var skipped = 0
     @Published var failed = 0
     @Published var lastSync: Date?
@@ -37,7 +38,7 @@ final class SyncEngine: ObservableObject {
         isRunning = true
         defer { isRunning = false }
 
-        total = 0; uploaded = 0; skipped = 0; failed = 0
+        total = 0; processed = 0; uploaded = 0; skipped = 0; failed = 0
         status = "Requesting photo access…"
 
         guard await photos.requestAuthorization() else {
@@ -67,59 +68,69 @@ final class SyncEngine: ObservableObject {
         var safeMark = mark
         var frozen = false // once an asset fails, stop advancing so it's retried next run
 
-        for asset in assets {
+        outer: for asset in assets {
             if Task.isCancelled { break }
-            guard let media = photos.describe(asset) else {
-                failed += 1; frozen = true
-                continue
-            }
-            status = "Processing \(media.originalFilename)"
 
-            // Cheap dedupe before any byte transfer.
-            if media.fileSize > 0,
-               await client.fileExists(filename: media.originalFilename, size: media.fileSize) {
-                skipped += 1
-                if !frozen { advance(&safeMark, asset.creationDate) }
-                continue
-            }
+            // One unit normally; a Live Photo yields two (HEIC still + paired MOV).
+            let units = photos.uploadUnits(for: asset)
+            if units.isEmpty { failed += 1; frozen = true; processed += 1; continue }
 
-            do {
-                let fileURL = try await photos.exportToTempFile(media)
-                defer { try? FileManager.default.removeItem(at: fileURL) }
+            var assetOK = true
+            for media in units {
+                if Task.isCancelled { break outer }
+                status = "Processing \(media.originalFilename)"
 
-                var maker: String? = "Apple"
-                var model: String?
-                var lens: String?
-                if asset.mediaType == .image {
-                    let info = photos.readImageCameraInfo(fileURL)
-                    maker = info.maker ?? "Apple"
-                    model = info.model
-                    lens = info.lens
+                // Cheap dedupe before any byte transfer.
+                if media.fileSize > 0,
+                   await client.fileExists(filename: media.originalFilename, size: media.fileSize) {
+                    skipped += 1
+                    continue
                 }
 
-                let meta = IngestMetadata(
-                    fileName: media.originalFilename,
-                    cameraMaker: maker,
-                    cameraModel: model,
-                    lensModel: lens,
-                    captureTime: media.captureTime,
-                    latitude: media.latitude,
-                    longitude: media.longitude,
-                    sourceType: "userLibrary",
-                    agentId: settings.agentId
-                )
-                try await client.ingest(fileURL: fileURL, meta: meta)
-                uploaded += 1
-                append("⬆️ \(media.originalFilename)")
-                if !frozen { advance(&safeMark, asset.creationDate) }
-            } catch {
-                // A Stop request cancels the in-flight upload — don't count it as a
-                // failure; just break so it's retried next run.
-                if Task.isCancelled { break }
-                failed += 1
-                frozen = true
-                append("❌ \(media.originalFilename): \(error.localizedDescription)")
+                do {
+                    let fileURL = try await photos.exportToTempFile(media)
+                    defer { try? FileManager.default.removeItem(at: fileURL) }
+
+                    // EXIF camera info only for the still image; the paired MOV has none.
+                    var maker: String? = "Apple"
+                    var model: String?
+                    var lens: String?
+                    if media.resource.type == .photo || media.resource.type == .fullSizePhoto {
+                        let info = photos.readImageCameraInfo(fileURL)
+                        maker = info.maker ?? "Apple"
+                        model = info.model
+                        lens = info.lens
+                    }
+
+                    let meta = IngestMetadata(
+                        fileName: media.originalFilename,
+                        cameraMaker: maker,
+                        cameraModel: model,
+                        lensModel: lens,
+                        captureTime: media.captureTime,
+                        latitude: media.latitude,
+                        longitude: media.longitude,
+                        sourceType: "userLibrary",
+                        agentId: settings.agentId
+                    )
+                    try await client.ingest(fileURL: fileURL, meta: meta)
+                    uploaded += 1
+                    append("⬆️ \(media.originalFilename)")
+                } catch {
+                    // A Stop request cancels the in-flight upload — don't count it as a
+                    // failure; just break so it's retried next run.
+                    if Task.isCancelled { break outer }
+                    failed += 1
+                    assetOK = false
+                    append("❌ \(media.originalFilename): \(error.localizedDescription)")
+                }
             }
+
+            // Advance the mark only for fully-uploaded assets, and only while nothing
+            // earlier has failed (a failed asset freezes the mark so it's retried next run).
+            if !assetOK { frozen = true }
+            if assetOK && !frozen { advance(&safeMark, asset.creationDate) }
+            processed += 1
         }
 
         if let safeMark { settings.highWaterMark = safeMark }
