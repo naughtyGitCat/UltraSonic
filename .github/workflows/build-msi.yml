@@ -3,6 +3,7 @@ name: Build MSI Installers
 on:
   push:
     branches: ['master']
+    tags: ['v*']
   workflow_dispatch:
 
 jobs:
@@ -73,17 +74,16 @@ jobs:
           name: msi-installers
           path: output/*.msi
 
-      # ── Release (only on tag push) ─────────────────────────
-
-      - name: Generate version tag
-        id: version
-        run: echo "tag=build-$(Get-Date -Format 'yyyyMMdd-HHmmss')" >> $env:GITHUB_OUTPUT
+      # ── Release (only on version-tag push, e.g. v1.3.0) ────────
+      # Guarded so master pushes / manual runs only build + upload artifacts
+      # (CI verification) and never cut a release.
 
       - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: Build ${{ steps.version.outputs.tag }}
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
           files: |
             output/UltraSonic.LrWallPaper.msi
             output/UltraSonic.LrWallPaper.Agent.msi
