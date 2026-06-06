@@ -74,6 +74,14 @@ struct ContentView: View {
                     }
                 }
 
+                Section("Library") {
+                    NavigationLink {
+                        BrowseView(baseURL: endpoint)
+                    } label: {
+                        Label("Browse Library", systemImage: "photo.on.rectangle")
+                    }
+                }
+
                 Section("Log") {
                     if engine.log.isEmpty {
                         Text("No activity yet").foregroundStyle(.secondary)
