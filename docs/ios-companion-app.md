@@ -58,10 +58,13 @@ iOS's **PhotoKit** (`PHAsset`/`PHPhotoLibrary`) exposes everything we need
 - `PHAsset.sourceType` → `.typeUserLibrary` vs `.typeCloudShared` /
   `.typeiTunesSynced` — excludes iCloud-shared and iTunes-synced content. **Note:**
   `.typeUserLibrary` means "in the user's library", **not** "shot by this device" —
-  it still includes AirDrop'd / third-party-app saves / downloads. So we additionally
-  gate on camera-capture filename prefixes (`IMG_` iPhone/Canon, `DJI_` drone,
-  `DSC`/`_DSC` Sony/Nikon — the AFC path's "shot by this device" intent), since received
-  saves carry other names (e.g. `image-2025-09-06-10:01:24-114.jpg`, UUIDs, `[000123].jpg`).
+  it still includes AirDrop'd / third-party-app saves / downloads (e.g.
+  `image-2025-09-06-10:01:24-114.jpg`, `qq_pic…`, UUIDs) **and** non-iPhone gear (DJI
+  drone, DSLR). This app ingests **iPhone captures only** — other cameras reach the
+  archive via the Agent's removable-device (SD card) scan, not the phone. So we gate on
+  the `IMG_` filename (cheap, no download) and confirm EXIF `Make == "Apple"` after
+  download (catches e.g. a Canon photo also named `IMG_`), mirroring the AFC path's
+  "shot by this device" check.
 - Camera/capture metadata, `creationDate`, location, dimensions, duration,
   `mediaType`, `mediaSubtypes` (e.g. Live Photo, HDR) — all queryable.
 - `isFromMyDevice`-style filtering via `PHFetchOptions` predicates.

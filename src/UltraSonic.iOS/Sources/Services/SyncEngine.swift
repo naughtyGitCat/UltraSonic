@@ -95,11 +95,11 @@ final class SyncEngine: ObservableObject {
             }.value
             if units.isEmpty { failed += 1; frozen = true; processed += 1; continue }
 
-            // Only upload this-device captures. .typeUserLibrary means "in your library",
-            // NOT "shot here" — it still includes AirDrop'd / third-party-app saves /
-            // downloads (e.g. "image-2025-09-06-10:01:24-114.jpg"). Apple camera captures
-            // are IMG_####.{HEIC,JPG,MOV} (incl. edited IMG_E####). Cheap pre-transfer gate,
-            // matching the AFC path's EXIF "shot by this device" intent.
+            // Only upload iPhone captures. .typeUserLibrary means "in your library", NOT
+            // "shot here" — it also holds AirDrop'd / third-party-app saves / downloads
+            // (image-…, qq_pic…, UUIDs) AND non-iPhone gear (DJI / DSLR). Those camera
+            // sources come in via the Agent's SD-card scan, not the phone. Cheap IMG_
+            // filename pre-filter here; EXIF Make=="Apple" confirms after download.
             if let primary = units.first?.originalFilename, !Self.isDeviceCapture(primary) {
                 skipped += 1
                 if !frozen { advance(&safeMark, asset.creationDate) }
@@ -138,6 +138,15 @@ final class SyncEngine: ObservableObject {
                         maker = info.maker ?? "Apple"
                         model = info.model
                         lens = info.lens
+
+                        // Confirm it was shot by an Apple device. The IMG_ name is a cheap
+                        // proxy, but Canon also uses IMG_ — drop a confirmed non-Apple maker
+                        // (nil/unknown is kept on the IMG_ name's benefit of the doubt).
+                        if let mk = info.maker, mk.caseInsensitiveCompare("Apple") != .orderedSame {
+                            skipped += 1
+                            append("⤳ not Apple (\(mk)): \(media.originalFilename)")
+                            continue
+                        }
                     }
 
                     let meta = IngestMetadata(
@@ -183,17 +192,14 @@ final class SyncEngine: ObservableObject {
         }
     }
 
-    /// Camera-capture filename prefixes — iPhone/Canon (IMG_), DJI drone (DJI_),
-    /// Sony/Nikon etc. (DSC, _DSC). Edited stills (IMG_E####) and Live Photo MOVs
-    /// (IMG_####.MOV) match too. Easy to extend (GoPro GOPR…, etc.).
-    private static let capturePrefixes = ["IMG_", "DJI_", "DSC", "_DSC"]
-
-    /// True if the filename looks like a real camera capture. .typeUserLibrary still
-    /// admits AirDrop'd / third-party-app / downloaded saves (image-…, UUIDs,
-    /// [000123]…, mmexport…); those carry non-camera names and are excluded.
+    /// Cheap pre-transfer gate for "shot by an iPhone": Apple camera captures are
+    /// IMG_####.{HEIC,JPG,MOV} (incl. edited IMG_E####, Live Photo IMG_####.MOV).
+    /// This app only ingests iPhone captures — DJI drone / DSLR media reach the
+    /// archive via the Agent's removable-device (SD card) scan, not the phone, so we
+    /// deliberately do NOT whitelist DJI_/DSC here. EXIF Make=="Apple" confirms after
+    /// download (catches e.g. a Canon photo that's also named IMG_).
     static func isDeviceCapture(_ filename: String) -> Bool {
-        let u = filename.uppercased()
-        return capturePrefixes.contains { u.hasPrefix($0) }
+        filename.uppercased().hasPrefix("IMG_")
     }
 
     private func advance(_ mark: inout Date?, _ date: Date?) {
