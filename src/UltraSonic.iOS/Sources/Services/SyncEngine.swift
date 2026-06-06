@@ -16,6 +16,21 @@ final class SyncEngine: ObservableObject {
     @Published var log: [String] = []
 
     private let photos = PhotoLibraryService()
+    private var syncTask: Task<Void, Never>?
+
+    /// Start a sync run as a cancellable task (used by the UI "Sync Now" button).
+    func start() {
+        guard !isRunning else { return }
+        syncTask = Task { await syncNow() }
+    }
+
+    /// Request the in-flight run to stop. Cancels the current upload and breaks the
+    /// loop at the next asset boundary; already-uploaded assets are kept, the rest
+    /// are picked up on the next run (the high-water mark only advanced past successes).
+    func stop() {
+        syncTask?.cancel()
+        if isRunning { status = "Stopping…" }
+    }
 
     func syncNow() async {
         guard !isRunning else { return }
@@ -44,6 +59,7 @@ final class SyncEngine: ObservableObject {
         var frozen = false // once an asset fails, stop advancing so it's retried next run
 
         for asset in assets {
+            if Task.isCancelled { break }
             guard let media = photos.describe(asset) else {
                 failed += 1; frozen = true
                 continue
@@ -88,6 +104,9 @@ final class SyncEngine: ObservableObject {
                 append("⬆️ \(media.originalFilename)")
                 if !frozen { advance(&safeMark, asset.creationDate) }
             } catch {
+                // A Stop request cancels the in-flight upload — don't count it as a
+                // failure; just break so it's retried next run.
+                if Task.isCancelled { break }
                 failed += 1
                 frozen = true
                 append("❌ \(media.originalFilename): \(error.localizedDescription)")
@@ -96,8 +115,13 @@ final class SyncEngine: ObservableObject {
 
         if let safeMark { settings.highWaterMark = safeMark }
         lastSync = Date()
-        status = "Done — \(uploaded) uploaded, \(skipped) skipped, \(failed) failed"
-        append("✅ \(status)")
+        if Task.isCancelled {
+            status = "Stopped — \(uploaded) uploaded, \(skipped) skipped, \(failed) failed"
+            append("⏹ \(status)")
+        } else {
+            status = "Done — \(uploaded) uploaded, \(skipped) skipped, \(failed) failed"
+            append("✅ \(status)")
+        }
     }
 
     private func advance(_ mark: inout Date?, _ date: Date?) {
