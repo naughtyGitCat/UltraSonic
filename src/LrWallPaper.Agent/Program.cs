@@ -43,6 +43,15 @@ Log.Logger = new LoggerConfiguration()
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Large media uploads (iOS ingest proxied from Master): lift Kestrel's 30 MB default
+// body cap and the multipart form length limit, otherwise big videos/MOVs get a 413.
+builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = null);
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
+{
+    o.MultipartBodyLengthLimit = long.MaxValue;
+    o.ValueLengthLimit = int.MaxValue;
+});
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -283,6 +292,19 @@ app.MapPost("/api/agent/move", async (HttpContext ctx) =>
 // DeviceSyncGenericJob — then push metadata via the normal /api/master/sync path,
 // so the iOS upload is indistinguishable from a device-sync record downstream and
 // the catalog's agent_id correctly points at the agent that physically holds the file.
+// Some library assets (AirDrop'd / third-party-app saves) keep filenames with
+// characters Windows forbids in paths (e.g. "image-2025-09-06-10:01:24-114.jpg" —
+// the colons make File.Move throw ERROR_INVALID_NAME). Map those to '_'.
+static string SanitizeWinFileName(string name)
+{
+    const string bad = "<>:\"/\\|?*";
+    var chars = name.ToCharArray();
+    for (int i = 0; i < chars.Length; i++)
+        if (chars[i] < 32 || bad.IndexOf(chars[i]) >= 0) chars[i] = '_';
+    var result = new string(chars).TrimEnd('.', ' ').Trim();
+    return string.IsNullOrEmpty(result) ? "file" : result;
+}
+
 app.MapPost("/api/agent/ingest", async (HttpContext ctx, AgentState agentState, IConfiguration config) =>
 {
     if (!agentState.IsRequestEnabled) return Results.StatusCode(503);
@@ -295,6 +317,7 @@ app.MapPost("/api/agent/ingest", async (HttpContext ctx, AgentState agentState, 
     var fileName = Path.GetFileName(
         !string.IsNullOrWhiteSpace(form["fileName"]) ? form["fileName"].ToString() : file.FileName);
     if (string.IsNullOrWhiteSpace(fileName)) return Results.BadRequest(new { error = "fileName is required" });
+    fileName = SanitizeWinFileName(fileName);
 
     var archiveDir = config["DeviceSync:AppleImport:ArchiveDirectory"];
     if (string.IsNullOrWhiteSpace(archiveDir)) archiveDir = config["DeviceSync:GenericImport:ArchiveDirectory"];
