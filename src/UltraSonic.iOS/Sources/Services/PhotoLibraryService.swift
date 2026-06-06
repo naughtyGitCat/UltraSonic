@@ -52,27 +52,38 @@ final class PhotoLibraryService {
         return assets
     }
 
-    /// Resolve filename/size/location + the primary resource for upload.
-    func describe(_ asset: PHAsset) -> MediaAsset? {
+    /// The resource(s) to upload for an asset. Normally one (the primary). For a
+    /// **Live Photo** it's two — the HEIC still and the paired MOV — uploaded as
+    /// separate files; the server pairs them by base name (matching the Agent path).
+    func uploadUnits(for asset: PHAsset) -> [MediaAsset] {
         let resources = PHAssetResource.assetResources(for: asset)
+
+        func make(_ resource: PHAssetResource) -> MediaAsset {
+            // `fileSize` is exposed only via KVC on PHAssetResource (no public accessor).
+            let size = (resource.value(forKey: "fileSize") as? Int64) ?? 0
+            return MediaAsset(
+                asset: asset,
+                originalFilename: resource.originalFilename,
+                fileSize: size,
+                captureTime: asset.creationDate ?? Date(),
+                latitude: asset.location?.coordinate.latitude,
+                longitude: asset.location?.coordinate.longitude,
+                resource: resource
+            )
+        }
+
+        // Live Photo → upload both components (still + paired video).
+        if asset.mediaSubtypes.contains(.photoLive) {
+            let still = resources.first { $0.type == .photo } ?? resources.first { $0.type == .fullSizePhoto }
+            let video = resources.first { $0.type == .pairedVideo } ?? resources.first { $0.type == .fullSizePairedVideo }
+            let units = [still, video].compactMap { $0 }.map(make)
+            if !units.isEmpty { return units }
+        }
+
         let primary = resources.first { $0.type == .photo || $0.type == .video }
             ?? resources.first { $0.type == .fullSizePhoto || $0.type == .fullSizeVideo }
             ?? resources.first
-        guard let resource = primary else { return nil }
-
-        // `fileSize` is exposed only via KVC on PHAssetResource (no public accessor).
-        // Needed for the cheap file-exists precheck before any byte transfer.
-        let size = (resource.value(forKey: "fileSize") as? Int64) ?? 0
-
-        return MediaAsset(
-            asset: asset,
-            originalFilename: resource.originalFilename,
-            fileSize: size,
-            captureTime: asset.creationDate ?? Date(),
-            latitude: asset.location?.coordinate.latitude,
-            longitude: asset.location?.coordinate.longitude,
-            resource: resource
-        )
+        return primary.map { [make($0)] } ?? []
     }
 
     /// Stream original bytes to a temp file — safe for multi-GB videos (no full in-memory load).

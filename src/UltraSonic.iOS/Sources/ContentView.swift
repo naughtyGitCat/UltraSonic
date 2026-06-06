@@ -52,7 +52,7 @@ struct ContentView: View {
 
                     if engine.total > 0 {
                         ProgressView(
-                            value: Double(engine.uploaded + engine.skipped + engine.failed),
+                            value: Double(min(engine.processed, engine.total)),
                             total: Double(engine.total)
                         )
                     }
