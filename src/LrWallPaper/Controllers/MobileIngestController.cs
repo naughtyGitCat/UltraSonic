@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+using System.Globalization;
 using LrWallPaper.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,42 +7,47 @@ namespace LrWallPaper.Controllers;
 /// <summary>
 /// Binary-ingest endpoint for the iOS companion app (UltraSonic.iOS).
 ///
-/// Unlike <see cref="MasterSyncController"/>.<c>Sync</c> — which only accepts metadata
-/// records for files an Agent has already placed on disk — this endpoint receives the
-/// raw file bytes + metadata directly from the phone over the LAN (no Windows Agent,
-/// no AFC/USB). It mirrors the Agent's archive layout (<c>ArchiveDir/yyyy/yyyy-MM-dd/filename</c>)
-/// and records the same catalog + archive-history rows, so the iOS path is
-/// indistinguishable from the Agent path downstream.
+/// Master NEVER stores media on its own disk — physical storage lives on Agent
+/// nodes, and Master may not even run on the media-archive machine. This endpoint
+/// is therefore a thin streaming PROXY, symmetric to the <c>GET /api/image</c>
+/// agent-forwarding path: it dedupe-guards against the catalog, resolves the
+/// configured archive Agent, and forwards the multipart upload to that Agent's
+/// <c>POST /api/agent/ingest</c>. The Agent writes the bytes to its own archive
+/// disk and pushes metadata back through the normal <c>/api/master/sync</c> path,
+/// so the iOS upload is indistinguishable from a device-sync record downstream
+/// (and the catalog's <c>agent_id</c> correctly points at the agent that holds
+/// the file, which is what the image proxy needs to serve it later).
 ///
-/// The iOS app is expected to do the camera-vs-received filtering on-device via PhotoKit
-/// (PHAsset.sourceType == .typeUserLibrary) and to precheck /api/master/file-exists before
-/// uploading, so this endpoint only ever sees genuinely-new, camera-captured assets.
+/// The phone only ever talks to Master via <see cref="MobileIngestRequest"/>;
+/// it does its camera-vs-received filtering on-device (PhotoKit
+/// <c>PHAsset.sourceType == .typeUserLibrary</c>) and prechecks
+/// <c>/api/master/file-exists</c> before uploading.
 /// </summary>
 [Route("api/master")]
 [ApiController]
 public class MobileIngestController : ControllerBase
 {
     private readonly FileMD5Manager _md5Manager;
-    private readonly MasterReplicationService _replicationService;
+    private readonly AgentManager _agentManager;
     private readonly IConfiguration _configuration;
     private readonly ILogger<MobileIngestController> _logger;
 
     public MobileIngestController(
         FileMD5Manager md5Manager,
-        MasterReplicationService replicationService,
+        AgentManager agentManager,
         IConfiguration configuration,
         ILogger<MobileIngestController> logger)
     {
         _md5Manager = md5Manager;
-        _replicationService = replicationService;
+        _agentManager = agentManager;
         _configuration = configuration;
         _logger = logger;
     }
 
     /// <summary>
-    /// Accepts one media asset (multipart/form-data): the file bytes plus its metadata.
-    /// Returns { skipped = true } when the asset already exists (dedupe), or
-    /// { saved = true, path, md5 } once archived and catalogued.
+    /// Accepts one media asset (multipart/form-data) and forwards it to the archive
+    /// Agent. Returns the Agent's JSON verbatim once stored, <c>{ skipped = true }</c>
+    /// when the asset already exists (dedupe), or 502/503 if no Agent could store it.
     /// </summary>
     [HttpPost("ingest")]
     [DisableRequestSizeLimit]
@@ -61,106 +66,83 @@ public class MobileIngestController : ControllerBase
 
         var size = file.Length;
 
-        // Dedupe: same contract the Agent uses (filename + size, with iCloud-suffix fuzzing).
+        // Dedupe before moving any bytes off the phone's connection to an Agent —
+        // same contract the Agent uses (filename + size, with iCloud-suffix fuzzing).
         if (await _md5Manager.FileExistsAsync(fileName, size))
         {
-            _logger.LogDebug("iOS ingest skipped (already on Master): {File}", fileName);
+            _logger.LogDebug("iOS ingest skipped (already in Master catalog): {File}", fileName);
             return Ok(new { skipped = true, reason = "exists", fileName });
         }
 
-        var archiveDir = _configuration["UltraSonic:AppleImport:ArchiveDirectory"];
-        if (string.IsNullOrWhiteSpace(archiveDir))
-            archiveDir = _configuration["UltraSonic:ArchivePaths:Current"];
-        if (string.IsNullOrWhiteSpace(archiveDir))
-            return StatusCode(500, new { error = "UltraSonic:AppleImport:ArchiveDirectory is not configured" });
-
-        var captureTime = request.CaptureTime ?? DateTime.Now;
-
-        var targetDir = Path.Combine(
-            archiveDir,
-            captureTime.Year.ToString(),
-            captureTime.ToString("yyyy-MM-dd"));
-        Directory.CreateDirectory(targetDir);
-
-        var targetFile = Path.Combine(targetDir, fileName);
-
-        // Disk-level guard in case the catalog and the filesystem disagree.
-        if (System.IO.File.Exists(targetFile) && new FileInfo(targetFile).Length == size)
-        {
-            _logger.LogDebug("iOS ingest skipped (file already on disk): {File}", targetFile);
-            return Ok(new { skipped = true, reason = "on-disk", fileName });
-        }
-
-        string md5;
-        try
-        {
-            await using (var dest = new FileStream(targetFile, FileMode.Create, FileAccess.Write, FileShare.None))
+        // Master holds no media — resolve the storage Agent and forward to it.
+        var agent = await ResolveTargetAgentAsync();
+        if (agent is null)
+            return StatusCode(503, new
             {
-                await file.CopyToAsync(dest, ct);
-            }
-            md5 = await ComputeMd5Async(targetFile, ct);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "iOS ingest failed writing {File}", targetFile);
-            try { if (System.IO.File.Exists(targetFile)) System.IO.File.Delete(targetFile); } catch { /* best-effort */ }
-            return StatusCode(500, new { error = "failed to store file", detail = ex.Message });
-        }
-
-        var entity = new FileMD5Entity
-        {
-            FilePath = targetDir,
-            FileName = fileName,
-            CameraMaker = request.CameraMaker ?? "",
-            CameraModel = request.CameraModel ?? "",
-            LensModel = request.LensModel ?? "",
-            AgentId = string.IsNullOrWhiteSpace(request.AgentId) ? "ios" : request.AgentId,
-            Latitude = request.Latitude,
-            Longitude = request.Longitude,
-            FileSize = size,
-            FileMD5 = md5,
-            CaptureTime = captureTime
-        };
-        await _md5Manager.SaveFileMD5Async(entity);
-
-        // Mirror the Agent's archive-history bookkeeping.
-        try
-        {
-            using var db = _md5Manager.OpenDb();
-            await db.InsertAsync(new ArchiveHistoryEntity
-            {
-                SourcePath = $"ios:{request.SourceType ?? "userLibrary"}",
-                TargetPath = targetFile,
-                FileName = fileName,
-                FileSize = size,
-                FileMD5 = md5,
-                TransferMode = "upload",
-                DeviceName = request.CameraModel,
-                AgentId = entity.AgentId,
-                AgentName = "iOS Companion",
-                CameraModel = request.CameraModel,
-                CaptureTime = captureTime,
-                ArchivedAt = DateTime.Now
+                error = "no archive agent available; set UltraSonic:MobileIngest:TargetAgentId, "
+                      + "or register exactly one Agent"
             });
+
+        // Stream the file from the framework-buffered request straight into the
+        // forwarded multipart body — never fully resident in Master's memory.
+        using var content = new MultipartFormDataContent();
+        content.Add(new StreamContent(file.OpenReadStream()), "file", fileName);
+
+        void Field(string name, string? value)
+        {
+            if (!string.IsNullOrEmpty(value)) content.Add(new StringContent(value), name);
+        }
+
+        Field("fileName", fileName);
+        Field("cameraMaker", request.CameraMaker);
+        Field("cameraModel", request.CameraModel);
+        Field("lensModel", request.LensModel);
+        Field("captureTime", (request.CaptureTime ?? DateTime.Now).ToString("yyyy-MM-ddTHH:mm:ss"));
+        if (request.Latitude is { } lat) Field("latitude", lat.ToString(CultureInfo.InvariantCulture));
+        if (request.Longitude is { } lon) Field("longitude", lon.ToString(CultureInfo.InvariantCulture));
+        Field("sourceType", request.SourceType ?? "userLibrary");
+
+        using var client = new HttpClient(new HttpClientHandler { UseProxy = false })
+        {
+            Timeout = TimeSpan.FromHours(1) // large videos over LAN
+        };
+        try
+        {
+            var resp = await client.PostAsync($"{agent.Endpoint.TrimEnd('/')}/api/agent/ingest", content, ct);
+            var bodyText = await resp.Content.ReadAsStringAsync(ct);
+            if (!resp.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("iOS ingest: agent {Agent} returned {Status}: {Body}",
+                    agent.Id, (int)resp.StatusCode, bodyText);
+                return StatusCode(502, new { error = "archive agent rejected upload", status = (int)resp.StatusCode, detail = bodyText });
+            }
+            _logger.LogInformation("iOS ingest forwarded {File} ({Size} bytes) -> agent {Agent}", fileName, size, agent.Id);
+            return Content(bodyText, "application/json");
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "iOS ingest: archive-history insert failed for {File}", fileName);
+            _logger.LogError(ex, "iOS ingest: failed forwarding {File} to agent {Agent}", fileName, agent.Id);
+            return StatusCode(502, new { error = "failed to reach archive agent", detail = ex.Message });
         }
-
-        // Gossip-replicate to peer Masters, same as the Agent push path.
-        _replicationService.Enqueue(new List<FileMD5Entity> { entity });
-
-        _logger.LogInformation("iOS ingest stored {File} ({Size} bytes) -> {Target}", fileName, size, targetFile);
-        return Ok(new { saved = true, path = targetFile, md5, fileName });
     }
 
-    private static async Task<string> ComputeMd5Async(string path, CancellationToken ct)
+    /// <summary>
+    /// Pick the Agent that should archive iOS uploads: the configured
+    /// <c>UltraSonic:MobileIngest:TargetAgentId</c>, else the sole registered Agent.
+    /// Returns null when the target can't be determined (caller responds 503).
+    /// </summary>
+    private async Task<AgentEntity?> ResolveTargetAgentAsync()
     {
-        await using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        using var md5 = MD5.Create();
-        var hash = await md5.ComputeHashAsync(fs, ct);
-        return Convert.ToHexString(hash).ToLowerInvariant();
+        var agents = (await _agentManager.GetAllAgentsAsync())
+            .Where(a => !string.IsNullOrEmpty(a.Endpoint))
+            .ToList();
+        if (agents.Count == 0) return null;
+
+        var targetId = _configuration["UltraSonic:MobileIngest:TargetAgentId"];
+        if (!string.IsNullOrWhiteSpace(targetId))
+            return agents.FirstOrDefault(a => a.Id == targetId);
+
+        return agents.Count == 1 ? agents[0] : null;
     }
 }
 

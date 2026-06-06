@@ -20,8 +20,10 @@ straight to the Master node over the LAN — no Windows Agent, no USB/AFC.
 5. **Advance the high-water mark** only past assets that completed without error
    (a failure is retried next run, never silently skipped).
 
-Master archives to `ArchiveDir/yyyy/yyyy-MM-dd/filename` and writes the same catalog +
-archive-history rows as the Agent path, so iOS uploads are indistinguishable downstream.
+Master holds no media — it **proxies** the upload to the archive Agent (the storage node;
+Master may not even run on the media disk). The Agent writes to `ArchiveDir/yyyy/yyyy-MM-dd/filename`
+and pushes the same catalog + archive-history rows as the device-sync path, so iOS uploads are
+indistinguishable downstream (and `agent_id` correctly points at the agent that holds the file).
 
 ## Build & run (macOS + Xcode required)
 
@@ -80,8 +82,13 @@ Sources/
 
 ## Server side
 
-Endpoint added on Master (this monorepo):
-`src/LrWallPaper/Controllers/MobileIngestController.cs` → `POST /api/master/ingest`
-(multipart: `file` + `fileName`, `cameraMaker`, `cameraModel`, `lensModel`, `captureTime`,
-`latitude`, `longitude`, `sourceType`, `agentId`). Uses
-`UltraSonic:AppleImport:ArchiveDirectory` for the archive root.
+Endpoints (this monorepo):
+- **Master** `src/LrWallPaper/Controllers/MobileIngestController.cs` → `POST /api/master/ingest`
+  (multipart: `file` + `fileName`, `cameraMaker`, `cameraModel`, `lensModel`, `captureTime`,
+  `latitude`, `longitude`, `sourceType`). Dedupe-guards against the catalog, then **streams the
+  upload through to the archive Agent** — Master never writes media to its own disk. Picks the
+  Agent via `UltraSonic:MobileIngest:TargetAgentId` (or the sole registered Agent).
+- **Agent** `src/LrWallPaper.Agent/Program.cs` → `POST /api/agent/ingest`. Archives to
+  `DeviceSync:AppleImport:ArchiveDirectory` (`yyyy/yyyy-MM-dd/filename`, same collision rule as the
+  device-sync jobs), computes MD5, and pushes metadata via the normal `/api/master/sync` +
+  `/api/master/archive-history` contract.
