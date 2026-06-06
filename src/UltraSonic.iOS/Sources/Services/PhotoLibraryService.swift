@@ -17,7 +17,9 @@ struct MediaAsset {
 /// and best-effort EXIF camera info. This is the whole point of the app — judging
 /// "camera-captured vs received" on-device (PHAsset.sourceType) so we never transfer
 /// AirDrop'd / iCloud-shared content we don't want (the waste the AFC path can't avoid).
-final class PhotoLibraryService {
+/// Stateless, so safe to call from a background task off the main actor
+/// (the heavy PhotoKit enumeration must not run on the main thread).
+final class PhotoLibraryService: @unchecked Sendable {
 
     func requestAuthorization() async -> Bool {
         let status = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
