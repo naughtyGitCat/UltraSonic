@@ -4,6 +4,9 @@ struct ContentView: View {
     @EnvironmentObject var engine: SyncEngine
     @State private var endpoint = AppSettings.shared.masterEndpoint
 
+    enum Health { case unknown, checking, healthy, down }
+    @State private var health: Health = .unknown
+
     var body: some View {
         NavigationStack {
             Form {
@@ -14,7 +17,22 @@ struct ContentView: View {
                         .keyboardType(.URL)
                         .onChange(of: endpoint) { newValue in
                             AppSettings.shared.masterEndpoint = newValue
+                            health = .unknown   // endpoint changed — stale until re-checked
                         }
+                        .onSubmit { checkHealth() }
+
+                    HStack(spacing: 8) {
+                        if health == .checking {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Circle().fill(healthColor).frame(width: 9, height: 9)
+                        }
+                        Text(healthText).font(.footnote).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Check") { checkHealth() }
+                            .font(.footnote)
+                            .disabled(health == .checking)
+                    }
                 }
 
                 Section("Sync") {
@@ -67,6 +85,35 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("UltraSonic")
+            .onAppear { checkHealth() }
+        }
+    }
+
+    private var healthColor: Color {
+        switch health {
+        case .healthy: return .green
+        case .down: return .red
+        case .checking, .unknown: return .secondary
+        }
+    }
+
+    private var healthText: String {
+        switch health {
+        case .unknown: return "Master status unknown"
+        case .checking: return "Checking Master…"
+        case .healthy: return "Master reachable"
+        case .down: return "Master unreachable"
+        }
+    }
+
+    /// Probe GET /api/health; ignore the result if the endpoint changed mid-flight.
+    private func checkHealth() {
+        let target = endpoint
+        guard !target.isEmpty else { health = .unknown; return }
+        health = .checking
+        Task {
+            let ok = await MasterClient(baseURL: target).health()
+            if target == endpoint { health = ok ? .healthy : .down }
         }
     }
 
