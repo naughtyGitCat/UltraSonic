@@ -10,8 +10,9 @@ final class SyncEngine: ObservableObject {
     @Published var status = "Idle"
     @Published var total = 0        // assets to consider (a Live Photo is one asset, two files)
     @Published var processed = 0    // assets finished, drives the progress bar
-    @Published var uploaded = 0     // files uploaded (Live Photo = 2)
-    @Published var skipped = 0
+    @Published var uploaded = 0          // files uploaded (Live Photo = 2)
+    @Published var skippedExisting = 0   // already on Master (dedupe) — the cross-device skip
+    @Published var skippedFiltered = 0   // excluded: not an iPhone capture (non-IMG_ / non-Apple)
     @Published var failed = 0
     @Published var lastSync: Date?
     @Published var log: [String] = []
@@ -47,7 +48,7 @@ final class SyncEngine: ObservableObject {
         isRunning = true
         defer { isRunning = false }
 
-        total = 0; processed = 0; uploaded = 0; skipped = 0; failed = 0
+        total = 0; processed = 0; uploaded = 0; skippedExisting = 0; skippedFiltered = 0; failed = 0
         status = "Requesting photo access…"
 
         guard await photos.requestAuthorization() else {
@@ -101,7 +102,7 @@ final class SyncEngine: ObservableObject {
             // sources come in via the Agent's SD-card scan, not the phone. Cheap IMG_
             // filename pre-filter here; EXIF Make=="Apple" confirms after download.
             if let primary = units.first?.originalFilename, !Self.isDeviceCapture(primary) {
-                skipped += 1
+                skippedFiltered += 1
                 if !frozen { advance(&safeMark, asset.creationDate) }
                 processed += 1
                 continue
@@ -114,7 +115,7 @@ final class SyncEngine: ObservableObject {
                 // Cheap dedupe before any byte transfer.
                 if media.fileSize > 0,
                    await client.fileExists(filename: media.originalFilename, size: media.fileSize) {
-                    skipped += 1
+                    skippedExisting += 1
                     continue
                 }
 
@@ -143,7 +144,7 @@ final class SyncEngine: ObservableObject {
                         // proxy, but Canon also uses IMG_ — drop a confirmed non-Apple maker
                         // (nil/unknown is kept on the IMG_ name's benefit of the doubt).
                         if let mk = info.maker, mk.caseInsensitiveCompare("Apple") != .orderedSame {
-                            skipped += 1
+                            skippedFiltered += 1
                             append("⤳ not Apple (\(mk)): \(media.originalFilename)")
                             continue
                         }
@@ -183,11 +184,12 @@ final class SyncEngine: ObservableObject {
 
         if let safeMark { settings.highWaterMark = safeMark }
         lastSync = Date()
+        let summary = "\(uploaded) uploaded, \(skippedExisting) on-server, \(skippedFiltered) filtered, \(failed) failed"
         if Task.isCancelled {
-            status = "Stopped — \(uploaded) uploaded, \(skipped) skipped, \(failed) failed"
+            status = "Stopped — \(summary)"
             append("⏹ \(status)")
         } else {
-            status = "Done — \(uploaded) uploaded, \(skipped) skipped, \(failed) failed"
+            status = "Done — \(summary)"
             append("✅ \(status)")
         }
     }
