@@ -67,6 +67,36 @@ final class MasterClient {
         }
     }
 
+    /// Browse the Master catalog (newest first), one page at a time.
+    func gallery(page: Int, pageSize: Int) async -> [MediaItem] {
+        guard var comps = URLComponents(string: "\(baseURL)/api/experiment/gallery") else { return [] }
+        comps.queryItems = [
+            URLQueryItem(name: "page", value: String(page)),
+            URLQueryItem(name: "pageSize", value: String(pageSize))
+        ]
+        guard let url = comps.url else { return [] }
+        do {
+            let (data, resp) = try await session.data(from: url)
+            guard (resp as? HTTPURLResponse)?.statusCode == 200 else { return [] }
+            return (try? JSONDecoder().decode([MediaItem].self, from: data)) ?? []
+        } catch {
+            return []
+        }
+    }
+
+    /// URL to fetch an item's bytes through Master. `convert=false` makes Master/Agent
+    /// skip the HEIC/RAW→JPEG step and return the original — iOS decodes HEIC natively,
+    /// so we save the server-side conversion and serve the full-quality original.
+    func imageURL(for item: MediaItem) -> URL? {
+        guard var comps = URLComponents(string: "\(baseURL)/api/image") else { return nil }
+        comps.queryItems = [
+            URLQueryItem(name: "path", value: item.fileFullPath),
+            URLQueryItem(name: "agentId", value: item.agentId ?? "local"),
+            URLQueryItem(name: "convert", value: "false")
+        ]
+        return comps.url
+    }
+
     /// Dedupe precheck — same endpoint the Agent uses (filename + size).
     func fileExists(filename: String, size: Int64) async -> Bool {
         guard var comps = URLComponents(string: "\(baseURL)/api/master/file-exists") else { return false }

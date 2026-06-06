@@ -90,7 +90,7 @@ string PathCacheKey(string filePath)
 }
 
 // Image streaming endpoint
-app.MapGet("/api/agent/image", (string path, AgentState agentState) =>
+app.MapGet("/api/agent/image", (string path, bool? convert, AgentState agentState) =>
 {
     if (!agentState.IsRequestEnabled)
     {
@@ -119,7 +119,8 @@ app.MapGet("/api/agent/image", (string path, AgentState agentState) =>
     };
 
     var needsConvert = new HashSet<string> { ".heic", ".cr2", ".cr3", ".nef", ".nrw", ".arw", ".sr2", ".srf", ".dng", ".raf", ".pef", ".rw2", ".orf" };
-    if (needsConvert.Contains(ext))
+    // convert defaults to true; convert=false serves original bytes (iOS decodes HEIC natively).
+    if (needsConvert.Contains(ext) && (convert ?? true))
     {
         // Check cache
         var cacheKey = PathCacheKey(path);
