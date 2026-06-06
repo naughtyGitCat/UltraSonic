@@ -183,11 +183,17 @@ final class SyncEngine: ObservableObject {
         }
     }
 
-    /// True if the filename looks like an Apple on-device camera capture (IMG_1234.HEIC,
-    /// edited IMG_E1234, Live Photo IMG_1234.MOV…). Excludes AirDrop'd / third-party /
-    /// downloaded saves that also live in .typeUserLibrary but carry other names.
+    /// Camera-capture filename prefixes — iPhone/Canon (IMG_), DJI drone (DJI_),
+    /// Sony/Nikon etc. (DSC, _DSC). Edited stills (IMG_E####) and Live Photo MOVs
+    /// (IMG_####.MOV) match too. Easy to extend (GoPro GOPR…, etc.).
+    private static let capturePrefixes = ["IMG_", "DJI_", "DSC", "_DSC"]
+
+    /// True if the filename looks like a real camera capture. .typeUserLibrary still
+    /// admits AirDrop'd / third-party-app / downloaded saves (image-…, UUIDs,
+    /// [000123]…, mmexport…); those carry non-camera names and are excluded.
     static func isDeviceCapture(_ filename: String) -> Bool {
-        filename.uppercased().hasPrefix("IMG_")
+        let u = filename.uppercased()
+        return capturePrefixes.contains { u.hasPrefix($0) }
     }
 
     private func advance(_ mark: inout Date?, _ date: Date?) {
