@@ -70,7 +70,11 @@ final class SyncEngine: ObservableObject {
         }
 
         status = "Scanning library…"
-        let assets = photos.fetchNewCameraAssets(since: mark)
+        // Enumerating the whole library is heavy and synchronous — run it OFF the main
+        // actor so it can't freeze the UI (the cause of the long black screen on reopen).
+        let assets = await Task.detached(priority: .utility) { [photos] in
+            photos.fetchNewCameraAssets(since: mark)
+        }.value
         total = assets.count
         append("Found \(assets.count) new camera asset(s) since \(mark.map(Self.fmt.string(from:)) ?? "the beginning")")
 
@@ -80,14 +84,20 @@ final class SyncEngine: ObservableObject {
         outer: for asset in assets {
             if Task.isCancelled { break }
 
+            // Throttle UI updates: a skip-heavy backfill churns thousands of assets fast;
+            // updating @Published every file caused a render storm. Update every 25.
+            if processed % 25 == 0 { status = "Syncing… \(processed)/\(total)" }
+
+            // Resolve resources off the main actor too (PHAssetResource access is sync).
             // One unit normally; a Live Photo yields two (HEIC still + paired MOV).
-            let units = photos.uploadUnits(for: asset)
+            let units = await Task.detached(priority: .utility) { [photos] in
+                photos.uploadUnits(for: asset)
+            }.value
             if units.isEmpty { failed += 1; frozen = true; processed += 1; continue }
 
             var assetOK = true
             for media in units {
                 if Task.isCancelled { break outer }
-                status = "Processing \(media.originalFilename)"
 
                 // Cheap dedupe before any byte transfer.
                 if media.fileSize > 0,
@@ -110,7 +120,9 @@ final class SyncEngine: ObservableObject {
                     var model: String?
                     var lens: String?
                     if media.resource.type == .photo || media.resource.type == .fullSizePhoto {
-                        let info = photos.readImageCameraInfo(fileURL)
+                        let info = await Task.detached(priority: .utility) { [photos] in
+                            photos.readImageCameraInfo(fileURL)
+                        }.value
                         maker = info.maker ?? "Apple"
                         model = info.model
                         lens = info.lens
@@ -129,6 +141,7 @@ final class SyncEngine: ObservableObject {
                     )
                     try await client.ingest(fileURL: fileURL, meta: meta)
                     uploaded += 1
+                    status = "⬆️ \(media.originalFilename)"
                     append("⬆️ \(media.originalFilename)")
                 } catch {
                     // A Stop request cancels the in-flight upload — don't count it as a
