@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Reflection;
 using LrWallPaper.Agent.Helpers;
 using Netimobiledevice;
 using Netimobiledevice.Afc;
@@ -111,6 +112,19 @@ public class DeviceSyncAppleJob : BackgroundService
                         continue;
                     }
 
+                    // Cheap device-match precheck: read only the file head via AFC
+                    // and parse EXIF Make/Model. Saves the full bulk download for
+                    // files not shot by this device (e.g. AirDrop'd content).
+                    // Returns: true=match, false=mismatch, null=undetermined.
+                    var headMatch = TryIsShotByThisDevice(afc, file, productName, tempDir);
+                    if (headMatch == false)
+                    {
+                        _logger.LogDebug("Not shot by this device (head-EXIF), skipping: {File}", file);
+                        continue;
+                    }
+                    // null falls through to the full pull + post-pull recheck below
+                    // (covers cases where head bytes had no EXIF or partial-read failed).
+
                     var tmpFile = Path.Combine(tempDir, filename);
                     _logger.LogDebug("Pulling {File} from device to {Tmp}", file, tmpFile);
                     afc.Pull(file, tmpFile);
@@ -206,6 +220,88 @@ public class DeviceSyncAppleJob : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to push Apple import batch to Master");
+        }
+    }
+
+    // --------------- partial-pull device match (root-cause fix for pull-then-discard) ---------------
+
+    // Netimobiledevice's AfcService exposes FileOpen / FileClose publicly but
+    // keeps FileRead non-public. We reach it via reflection so we can sample a
+    // small file head (EXIF) without downloading the whole file. If the package
+    // ever changes shape, every helper here returns null / false-positive-safe
+    // values, and the caller falls back to the original full-pull path.
+    private static MethodInfo? _afcFileOpen;
+    private static MethodInfo? _afcFileRead;
+    private static MethodInfo? _afcFileClose;
+    private static bool _reflectInitialized;
+    private const int HeadSampleBytes = 2 * 1024 * 1024; // 2 MB is enough for HEIC/JPEG/iPhone-MOV (fast-start moov)
+
+    private static void EnsureReflection()
+    {
+        if (_reflectInitialized) return;
+        _reflectInitialized = true;
+        var t = typeof(AfcService);
+        _afcFileOpen  = t.GetMethod("FileOpen",  BindingFlags.Instance | BindingFlags.Public);
+        _afcFileRead  = t.GetMethod("FileRead",  BindingFlags.Instance | BindingFlags.NonPublic);
+        _afcFileClose = t.GetMethod("FileClose", BindingFlags.Instance | BindingFlags.Public);
+    }
+
+    private byte[]? TryReadRemoteHead(AfcService afc, string remotePath, int maxBytes)
+    {
+        EnsureReflection();
+        if (_afcFileOpen is null || _afcFileRead is null || _afcFileClose is null) return null;
+        try
+        {
+            // FileOpen(string path, string mode) -> ulong handle; "r" = read
+            var handleObj = _afcFileOpen.Invoke(afc, [remotePath, "r"]);
+            if (handleObj is not ulong handle) return null;
+            try
+            {
+                using var ms = new MemoryStream();
+                const int chunk = 64 * 1024;
+                while (ms.Length < maxBytes)
+                {
+                    var part = _afcFileRead.Invoke(afc, [handle, (ulong)chunk]) as byte[];
+                    if (part is null || part.Length == 0) break;
+                    ms.Write(part, 0, part.Length);
+                }
+                return ms.ToArray();
+            }
+            finally
+            {
+                try { _afcFileClose.Invoke(afc, [handle]); } catch { /* best-effort */ }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "AFC partial-read unavailable; will fall back to full pull");
+            return null;
+        }
+    }
+
+    private bool? TryIsShotByThisDevice(AfcService afc, string remotePath, string productName, string tempDir)
+    {
+        var head = TryReadRemoteHead(afc, remotePath, HeadSampleBytes);
+        if (head is null || head.Length < 1024) return null;
+
+        // Persist the sample to a sniff file so we can reuse MediaHelpers.ReadExif (path-based).
+        var sniff = Path.Combine(tempDir, ".sniff_" + Guid.NewGuid().ToString("N") + Path.GetExtension(remotePath));
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            File.WriteAllBytes(sniff, head);
+            var exif = MediaHelpers.ReadExif(sniff);
+            if (string.IsNullOrEmpty(exif.CameraMaker) || string.IsNullOrEmpty(exif.CameraModel))
+                return null; // undetermined — head didn't contain a parseable Make/Model
+            return exif.CameraMaker == "Apple" && exif.CameraModel == productName;
+        }
+        catch
+        {
+            return null;
+        }
+        finally
+        {
+            try { File.Delete(sniff); } catch { /* best-effort */ }
         }
     }
 
