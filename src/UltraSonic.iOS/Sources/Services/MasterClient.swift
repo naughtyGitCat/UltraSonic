@@ -43,6 +43,30 @@ final class MasterClient {
         self.session = URLSession(configuration: cfg)
     }
 
+    /// Liveness check against GET /api/health. Uses a short-timeout, fail-fast session
+    /// (the main session has waitsForConnectivity + a long timeout for large uploads,
+    /// which would make a health probe hang when Master is down). True only on HTTP 200
+    /// with status "healthy".
+    func health() async -> Bool {
+        guard let url = URL(string: "\(baseURL)/api/health") else { return false }
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.timeoutIntervalForRequest = 5
+        cfg.timeoutIntervalForResource = 5
+        cfg.waitsForConnectivity = false
+        let probe = URLSession(configuration: cfg)
+        do {
+            let (data, resp) = try await probe.data(from: url)
+            guard (resp as? HTTPURLResponse)?.statusCode == 200 else { return false }
+            if let obj = try? JSONDecoder().decode([String: String].self, from: data),
+               let status = obj["status"] {
+                return status.lowercased() == "healthy"
+            }
+            return true // 200 but unrecognized body — still reachable
+        } catch {
+            return false
+        }
+    }
+
     /// Dedupe precheck — same endpoint the Agent uses (filename + size).
     func fileExists(filename: String, size: Int64) async -> Bool {
         guard var comps = URLComponents(string: "\(baseURL)/api/master/file-exists") else { return false }
