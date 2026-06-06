@@ -18,13 +18,19 @@ struct ContentView: View {
                 }
 
                 Section("Sync") {
-                    Button {
-                        Task { await engine.syncNow() }
-                    } label: {
-                        Label(engine.isRunning ? "Syncing…" : "Sync Now",
-                              systemImage: "arrow.triangle.2.circlepath")
+                    if engine.isRunning {
+                        Button(role: .destructive) {
+                            engine.stop()
+                        } label: {
+                            Label("Stop", systemImage: "stop.circle")
+                        }
+                    } else {
+                        Button {
+                            engine.start()
+                        } label: {
+                            Label("Sync Now", systemImage: "arrow.triangle.2.circlepath")
+                        }
                     }
-                    .disabled(engine.isRunning)
 
                     if engine.total > 0 {
                         ProgressView(
