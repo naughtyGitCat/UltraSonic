@@ -59,9 +59,9 @@ iOS's **PhotoKit** (`PHAsset`/`PHPhotoLibrary`) exposes everything we need
   `.typeiTunesSynced` — excludes iCloud-shared and iTunes-synced content. **Note:**
   `.typeUserLibrary` means "in the user's library", **not** "shot by this device" —
   it still includes AirDrop'd / third-party-app saves / downloads. So we additionally
-  gate on an Apple-capture filename pattern (`IMG_####…`, the AFC path's "shot by this
-  device" intent), since received saves carry other names (e.g.
-  `image-2025-09-06-10:01:24-114.jpg`).
+  gate on camera-capture filename prefixes (`IMG_` iPhone/Canon, `DJI_` drone,
+  `DSC`/`_DSC` Sony/Nikon — the AFC path's "shot by this device" intent), since received
+  saves carry other names (e.g. `image-2025-09-06-10:01:24-114.jpg`, UUIDs, `[000123].jpg`).
 - Camera/capture metadata, `creationDate`, location, dimensions, duration,
   `mediaType`, `mediaSubtypes` (e.g. Live Photo, HDR) — all queryable.
 - `isFromMyDevice`-style filtering via `PHFetchOptions` predicates.
