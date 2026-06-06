@@ -87,7 +87,9 @@ final class PhotoLibraryService {
     }
 
     /// Stream original bytes to a temp file — safe for multi-GB videos (no full in-memory load).
-    func exportToTempFile(_ media: MediaAsset) async throws -> URL {
+    /// `onDownloadProgress` fires (0…1) only while the original is being pulled from iCloud
+    /// (Optimize Storage placeholder); for an already-local original it isn't called.
+    func exportToTempFile(_ media: MediaAsset, onDownloadProgress: ((Double) -> Void)? = nil) async throws -> URL {
         let ext = (media.originalFilename as NSString).pathExtension
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -98,6 +100,7 @@ final class PhotoLibraryService {
 
         let opts = PHAssetResourceRequestOptions()
         opts.isNetworkAccessAllowed = true // allow iCloud "Optimize Storage" placeholders to download
+        if let onDownloadProgress { opts.progressHandler = onDownloadProgress }
 
         return try await withCheckedThrowingContinuation { cont in
             PHAssetResourceManager.default().requestData(

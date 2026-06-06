@@ -25,6 +25,15 @@ final class SyncEngine: ObservableObject {
         syncTask = Task { await syncNow() }
     }
 
+    /// Clear the high-water mark and run a full re-scan. Dedupe skips everything already
+    /// on Master and uploads only what's missing — e.g. the paired MOVs of Live Photos
+    /// that were uploaded before Live Photo support existed.
+    func resyncAll() {
+        guard !isRunning else { return }
+        AppSettings.shared.highWaterMark = nil
+        start()
+    }
+
     /// Request the in-flight run to stop. Cancels the current upload and breaks the
     /// loop at the next asset boundary; already-uploaded assets are kept, the rest
     /// are picked up on the next run (the high-water mark only advanced past successes).
@@ -88,7 +97,12 @@ final class SyncEngine: ObservableObject {
                 }
 
                 do {
-                    let fileURL = try await photos.exportToTempFile(media)
+                    let name = media.originalFilename
+                    let fileURL = try await photos.exportToTempFile(media) { p in
+                        Task { @MainActor [weak self] in
+                            self?.status = "⬇️ iCloud \(Int(p * 100))% — \(name)"
+                        }
+                    }
                     defer { try? FileManager.default.removeItem(at: fileURL) }
 
                     // EXIF camera info only for the still image; the paired MOV has none.
