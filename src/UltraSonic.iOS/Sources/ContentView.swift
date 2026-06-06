@@ -48,6 +48,12 @@ struct ContentView: View {
                         } label: {
                             Label("Sync Now", systemImage: "arrow.triangle.2.circlepath")
                         }
+                        Button {
+                            engine.resyncAll()
+                        } label: {
+                            Label("Re-scan All (backfill)", systemImage: "arrow.clockwise")
+                        }
+                        .foregroundStyle(.secondary)
                     }
 
                     if engine.total > 0 {
