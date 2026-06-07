@@ -8,6 +8,7 @@ import Photos
 final class SyncEngine: ObservableObject {
     @Published var isRunning = false
     @Published var status = "Idle"
+    @Published var currentDate = ""  // capture date of the asset in progress (its own UI line)
     @Published var total = 0        // assets to consider (a Live Photo is one asset, two files)
     @Published var processed = 0    // assets finished, drives the progress bar
     @Published var uploaded = 0          // files uploaded (Live Photo = 2)
@@ -49,6 +50,7 @@ final class SyncEngine: ObservableObject {
         defer { isRunning = false }
 
         total = 0; processed = 0; uploaded = 0; skippedExisting = 0; skippedFiltered = 0; failed = 0
+        currentDate = ""
         TempStore.purge() // reclaim any scratch files a previous crashed/jetsammed run leaked
         status = "Requesting photo access…"
 
@@ -91,8 +93,8 @@ final class SyncEngine: ObservableObject {
             // Show the current asset's capture date — since we go oldest→newest, it tells
             // you roughly how far through time the sync has reached.
             if processed % 25 == 0 {
-                let when = asset.creationDate.map { Self.fmt.string(from: $0) } ?? "—"
-                status = "\(when) · \(processed)/\(total)"
+                currentDate = asset.creationDate.map { Self.fmt.string(from: $0) } ?? ""
+                status = "Syncing \(processed)/\(total)"
             }
 
             // Resolve resources off the main actor too (PHAssetResource access is sync).
@@ -127,11 +129,11 @@ final class SyncEngine: ObservableObject {
 
                 do {
                     let name = media.originalFilename
-                    let dateStr = Self.fmt.string(from: media.captureTime) // shown in every phase
+                    currentDate = Self.fmt.string(from: media.captureTime) // its own UI line, stays put
                     // Small files come back in memory (no disk I/O); large ones on disk.
                     let payload = try await photos.export(media) { p in
                         Task { @MainActor [weak self] in
-                            self?.status = "\(dateStr) · ⬇️ iCloud \(Int(p * 100))% \(name)"
+                            self?.status = "⬇️ iCloud \(Int(p * 100))% \(name)"
                         }
                     }
                     defer { if case .file(let u) = payload { try? FileManager.default.removeItem(at: u) } }
@@ -174,7 +176,7 @@ final class SyncEngine: ObservableObject {
                     )
                     try await client.ingest(payload, meta: meta)
                     uploaded += 1
-                    status = "\(dateStr) · ⬆️ \(media.originalFilename)"
+                    status = "⬆️ \(media.originalFilename)"
                     append("⬆️ \(media.originalFilename)")
                 } catch {
                     // A Stop request cancels the in-flight upload — don't count it as a
