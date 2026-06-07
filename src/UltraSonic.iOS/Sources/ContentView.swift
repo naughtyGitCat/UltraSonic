@@ -148,9 +148,15 @@ struct ContentView: View {
     }
 
     private func stat(_ label: String, _ value: Int, _ color: Color) -> some View {
-        VStack {
-            Text("\(value)").font(.title3).bold().foregroundStyle(color)
-            Text(label).font(.caption2).foregroundStyle(.secondary)
+        VStack(spacing: 2) {
+            Text(value, format: .number)
+                .font(.title3).bold().foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)   // shrink to fit instead of wrapping (e.g. 12,368)
+            Text(label)
+                .font(.caption2).foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity)
     }
