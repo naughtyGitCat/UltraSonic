@@ -2,6 +2,13 @@ import Photos
 import ImageIO
 import CoreLocation
 
+/// Exported asset bytes, kept in memory for small files (no disk I/O — saves flash
+/// wear) or streamed to a temp file for large ones (constant memory).
+enum UploadPayload {
+    case data(Data)   // small file, fully in memory
+    case file(URL)    // large file on disk (caller deletes when done)
+}
+
 /// A camera-captured asset resolved to everything we need to dedupe + upload.
 struct MediaAsset {
     let asset: PHAsset
@@ -88,6 +95,40 @@ final class PhotoLibraryService: @unchecked Sendable {
         return primary.map { [make($0)] } ?? []
     }
 
+    /// Files at/under this size are exported & uploaded fully in memory (no disk I/O,
+    /// less flash wear); larger files stream through a temp file (constant memory).
+    static let inMemoryThreshold: Int64 = 100 * 1024 * 1024 // 100 MB
+
+    /// Export the original, choosing in-memory (small) vs on-disk (large) by file size.
+    func export(_ media: MediaAsset, onDownloadProgress: ((Double) -> Void)? = nil) async throws -> UploadPayload {
+        if media.fileSize > 0 && media.fileSize <= Self.inMemoryThreshold {
+            return .data(try await exportToData(media, onDownloadProgress: onDownloadProgress))
+        }
+        return .file(try await exportToTempFile(media, onDownloadProgress: onDownloadProgress))
+    }
+
+    /// Small-file path: accumulate the original in memory (bounded by inMemoryThreshold).
+    private func exportToData(_ media: MediaAsset, onDownloadProgress: ((Double) -> Void)?) async throws -> Data {
+        let opts = PHAssetResourceRequestOptions()
+        opts.isNetworkAccessAllowed = true
+        if let onDownloadProgress { opts.progressHandler = onDownloadProgress }
+        return try await withCheckedThrowingContinuation { cont in
+            var resumed = false
+            var buf = Data()
+            if media.fileSize > 0 { buf.reserveCapacity(Int(media.fileSize)) }
+            PHAssetResourceManager.default().requestData(
+                for: media.resource,
+                options: opts,
+                dataReceivedHandler: { chunk in buf.append(chunk) },
+                completionHandler: { error in
+                    if resumed { return }
+                    resumed = true
+                    if let error { cont.resume(throwing: error) } else { cont.resume(returning: buf) }
+                }
+            )
+        }
+    }
+
     /// Stream the original to a temp file. Uses PHAssetResourceManager.writeData, which
     /// writes the resource straight to disk with NO in-memory buffering. (The previous
     /// requestData + dataReceivedHandler approach accumulated a large MOV in memory and
@@ -116,9 +157,17 @@ final class PhotoLibraryService: @unchecked Sendable {
         }
     }
 
-    /// Best-effort EXIF Make / Model / LensModel from an image file.
+    /// Best-effort EXIF Make / Model / LensModel from an image file or its bytes.
     func readImageCameraInfo(_ url: URL) -> (maker: String?, model: String?, lens: String?) {
-        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+        cameraInfo(CGImageSourceCreateWithURL(url as CFURL, nil))
+    }
+
+    func readImageCameraInfo(_ data: Data) -> (maker: String?, model: String?, lens: String?) {
+        cameraInfo(CGImageSourceCreateWithData(data as CFData, nil))
+    }
+
+    private func cameraInfo(_ src: CGImageSource?) -> (maker: String?, model: String?, lens: String?) {
+        guard let src,
               let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any]
         else { return (nil, nil, nil) }
 
