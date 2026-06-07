@@ -154,9 +154,11 @@ final class MasterClient {
         }
     }
 
-    /// Upload one asset as multipart/form-data, streaming both the body and the file
-    /// from disk so neither is ever fully resident in memory.
-    func ingest(fileURL: URL, meta: IngestMetadata) async throws {
+    /// Upload one asset as multipart/form-data. Small files (in-memory payload) build
+    /// the whole body in RAM and upload it — no disk I/O. Large files (on-disk payload)
+    /// stream the body through a temp file, hashing through 1 MB chunks each wrapped in
+    /// an autoreleasepool so the transient Data buffers don't pile up and OOM the app.
+    func ingest(_ payload: UploadPayload, meta: IngestMetadata) async throws {
         guard let url = URL(string: "\(baseURL)/api/master/ingest") else { throw MasterClientError.badURL }
 
         let boundary = "Boundary-\(UUID().uuidString)"
@@ -164,46 +166,51 @@ final class MasterClient {
         req.httpMethod = "POST"
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
-        // Assemble the multipart body in a temp file (in the shared scratch dir so a
-        // jetsam mid-upload can't leak it permanently — it's purged next launch/sync).
-        let bodyURL = TempStore.file()
-        FileManager.default.createFile(atPath: bodyURL.path, contents: nil)
-        let body = try FileHandle(forWritingTo: bodyURL)
-        defer {
+        // Build the small fields prefix + the file-part header and the closing footer.
+        var prefix = Data()
+        func field(_ name: String, _ value: String) {
+            prefix.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".utf8))
+        }
+        field("fileName", meta.fileName)
+        if let v = meta.cameraMaker { field("cameraMaker", v) }
+        if let v = meta.cameraModel { field("cameraModel", v) }
+        if let v = meta.lensModel { field("lensModel", v) }
+        field("captureTime", Self.captureFmt.string(from: meta.captureTime))
+        if let v = meta.latitude { field("latitude", String(v)) }
+        if let v = meta.longitude { field("longitude", String(v)) }
+        field("sourceType", meta.sourceType)
+        field("agentId", meta.agentId)
+        prefix.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(meta.fileName)\"\r\nContent-Type: application/octet-stream\r\n\r\n".utf8))
+        let footer = Data("\r\n--\(boundary)--\r\n".utf8)
+
+        let resp: URLResponse
+        switch payload {
+        case .data(let fileData):
+            var body = Data()
+            body.reserveCapacity(prefix.count + fileData.count + footer.count)
+            body.append(prefix); body.append(fileData); body.append(footer)
+            (_, resp) = try await session.upload(for: req, from: body)
+
+        case .file(let fileURL):
+            let bodyURL = TempStore.file()
+            FileManager.default.createFile(atPath: bodyURL.path, contents: nil)
+            let body = try FileHandle(forWritingTo: bodyURL)
+            defer { try? body.close(); try? FileManager.default.removeItem(at: bodyURL) }
+            try body.write(contentsOf: prefix)
+
+            let input = try FileHandle(forReadingFrom: fileURL)
+            defer { try? input.close() }
+            while try autoreleasepool(invoking: { () -> Bool in
+                guard let chunk = try input.read(upToCount: 1 << 20), !chunk.isEmpty else { return false }
+                try body.write(contentsOf: chunk)
+                return true
+            }) {}
+            try body.write(contentsOf: footer)
             try? body.close()
-            try? FileManager.default.removeItem(at: bodyURL)
+
+            (_, resp) = try await session.upload(for: req, fromFile: bodyURL)
         }
 
-        // Use the throwing FileHandle APIs (write(contentsOf:) / read(upToCount:)).
-        // The legacy write(_:) / readData(ofLength:) raise an uncatchable Obj-C
-        // exception on any failure (disk pressure, bad handle) — that crashed the app
-        // on large videos instead of surfacing as a retryable error.
-        func field(_ name: String, _ value: String) throws {
-            try body.write(contentsOf: Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".utf8))
-        }
-
-        try field("fileName", meta.fileName)
-        if let v = meta.cameraMaker { try field("cameraMaker", v) }
-        if let v = meta.cameraModel { try field("cameraModel", v) }
-        if let v = meta.lensModel { try field("lensModel", v) }
-        try field("captureTime", Self.captureFmt.string(from: meta.captureTime))
-        if let v = meta.latitude { try field("latitude", String(v)) }
-        if let v = meta.longitude { try field("longitude", String(v)) }
-        try field("sourceType", meta.sourceType)
-        try field("agentId", meta.agentId)
-
-        // File part: header, streamed bytes, trailing boundary.
-        try body.write(contentsOf: Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(meta.fileName)\"\r\nContent-Type: application/octet-stream\r\n\r\n".utf8))
-
-        let input = try FileHandle(forReadingFrom: fileURL)
-        defer { try? input.close() }
-        while let chunk = try input.read(upToCount: 1 << 20), !chunk.isEmpty { // 1 MB
-            try body.write(contentsOf: chunk)
-        }
-        try body.write(contentsOf: Data("\r\n--\(boundary)--\r\n".utf8))
-        try? body.close()
-
-        let (_, resp) = try await session.upload(for: req, fromFile: bodyURL)
         guard let http = resp as? HTTPURLResponse else { throw MasterClientError.badResponse(-1) }
         guard (200...299).contains(http.statusCode) else { throw MasterClientError.badResponse(http.statusCode) }
     }

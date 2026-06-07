@@ -122,12 +122,13 @@ final class SyncEngine: ObservableObject {
 
                 do {
                     let name = media.originalFilename
-                    let fileURL = try await photos.exportToTempFile(media) { p in
+                    // Small files come back in memory (no disk I/O); large ones on disk.
+                    let payload = try await photos.export(media) { p in
                         Task { @MainActor [weak self] in
                             self?.status = "⬇️ iCloud \(Int(p * 100))% — \(name)"
                         }
                     }
-                    defer { try? FileManager.default.removeItem(at: fileURL) }
+                    defer { if case .file(let u) = payload { try? FileManager.default.removeItem(at: u) } }
 
                     // EXIF camera info only for the still image; the paired MOV has none.
                     var maker: String? = "Apple"
@@ -135,7 +136,10 @@ final class SyncEngine: ObservableObject {
                     var lens: String?
                     if media.resource.type == .photo || media.resource.type == .fullSizePhoto {
                         let info = await Task.detached(priority: .utility) { [photos] in
-                            photos.readImageCameraInfo(fileURL)
+                            switch payload {
+                            case .data(let d): return photos.readImageCameraInfo(d)
+                            case .file(let u): return photos.readImageCameraInfo(u)
+                            }
                         }.value
                         maker = info.maker ?? "Apple"
                         model = info.model
@@ -162,7 +166,7 @@ final class SyncEngine: ObservableObject {
                         sourceType: "userLibrary",
                         agentId: settings.agentId
                     )
-                    try await client.ingest(fileURL: fileURL, meta: meta)
+                    try await client.ingest(payload, meta: meta)
                     uploaded += 1
                     status = "⬆️ \(media.originalFilename)"
                     append("⬆️ \(media.originalFilename)")
