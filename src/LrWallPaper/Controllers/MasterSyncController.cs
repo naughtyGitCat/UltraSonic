@@ -40,6 +40,30 @@ public class MasterSyncController : ControllerBase
         return Ok(new { tombstoned, path = req.Path });
     }
 
+    /// <summary>List deletion tombstones (deleted archive files that won't be re-uploaded).</summary>
+    [HttpGet("tombstones")]
+    public async Task<IActionResult> GetTombstones([FromQuery] int page = 1, [FromQuery] int pageSize = 100)
+    {
+        var (items, total) = await _md5Manager.GetTombstonesAsync(page, pageSize);
+        return Ok(new { total, page, pageSize, items });
+    }
+
+    /// <summary>Restore one tombstone by id — the file becomes eligible to re-upload again.</summary>
+    [HttpDelete("tombstones/{id}")]
+    public async Task<IActionResult> DeleteTombstone(long id)
+    {
+        var ok = await _md5Manager.DeleteTombstoneAsync(id);
+        return ok ? Ok(new { restored = true, id }) : NotFound(new { error = "tombstone not found" });
+    }
+
+    /// <summary>Clear all tombstones (e.g. before a full data-loss re-upload).</summary>
+    [HttpDelete("tombstones")]
+    public async Task<IActionResult> ClearTombstones()
+    {
+        var cleared = await _md5Manager.ClearTombstonesAsync();
+        return Ok(new { cleared });
+    }
+
     [HttpPost("sync")]
     public async Task<IActionResult> Sync([FromBody] List<FileMD5Entity> captures, [FromQuery] bool is_republished = false)
     {

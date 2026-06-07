@@ -87,6 +87,11 @@ struct ContentView: View {
                     } label: {
                         Label("Browse Library", systemImage: "photo.on.rectangle")
                     }
+                    NavigationLink {
+                        TombstonesView(baseURL: endpoint)
+                    } label: {
+                        Label("Deleted (won't re-upload)", systemImage: "trash.slash")
+                    }
                 }
 
                 Section("Log") {

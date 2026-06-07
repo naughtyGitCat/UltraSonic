@@ -7,8 +7,9 @@ import FoldersTab from './components/FoldersTab';
 import LogsTab from './components/LogsTab';
 import BackupTab from './components/BackupTab';
 import ArchiveTab from './components/ArchiveTab';
+import TombstonesTab from './components/TombstonesTab';
 
-const TABS = ['Gallery', 'Nodes', 'Folders', 'Logs', 'Backup', 'Archive'];
+const TABS = ['Gallery', 'Nodes', 'Folders', 'Logs', 'Backup', 'Archive', 'Deleted'];
 
 function App() {
   const [activeTab, setActiveTab] = useState(0);
@@ -55,6 +56,7 @@ function App() {
           {activeTab === 3 && <LogsTab agents={agents} />}
           {activeTab === 4 && <BackupTab />}
           {activeTab === 5 && <ArchiveTab />}
+          {activeTab === 6 && <TombstonesTab />}
         </div>
       </div>
     </div>

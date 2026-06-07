@@ -46,6 +46,17 @@ namespace LrWallPaper.Services
         [Column("update_time")]
         public DateTime UpdateTime { get; set; }
     }
+    [TableName("deleted_files")]
+    public record TombstoneEntity
+    {
+        [Column("id")] public long Id { get; set; }
+        [Column("filename")] public string FileName { get; set; } = "";
+        [Column("file_size")] public long FileSize { get; set; }
+        [Column("file_md5")] public string? FileMD5 { get; set; }
+        [Column("agent_id")] public string? AgentId { get; set; }
+        [Column("deleted_at")] public DateTime DeletedAt { get; set; }
+    }
+
     public class FileMD5Manager
     {
         private readonly ILogger<FileMD5Manager> _logger;
@@ -400,6 +411,31 @@ namespace LrWallPaper.Services
             if (inserted > 0)
                 await db.ExecuteAsync("DELETE FROM file_info WHERE fullpath = @0", fullPath);
             return inserted > 0;
+        }
+
+        /// List deletion tombstones (newest first), paged.
+        public async Task<(List<TombstoneEntity> items, int total)> GetTombstonesAsync(int page, int pageSize)
+        {
+            using var db = OpenDb();
+            var total = await db.ExecuteScalarAsync<int>("SELECT COUNT(1) FROM deleted_files");
+            var items = await db.FetchAsync<TombstoneEntity>(
+                "SELECT * FROM deleted_files ORDER BY deleted_at DESC LIMIT @0 OFFSET @1",
+                pageSize, (page - 1) * pageSize);
+            return (items, total);
+        }
+
+        /// Remove a tombstone by id ("restore" — the file may re-upload on the next sync).
+        public async Task<bool> DeleteTombstoneAsync(long id)
+        {
+            using var db = OpenDb();
+            return (await db.ExecuteAsync("DELETE FROM deleted_files WHERE id = @0", id)) > 0;
+        }
+
+        /// Clear all tombstones (e.g. before a full data-loss re-upload). Returns count removed.
+        public async Task<int> ClearTombstonesAsync()
+        {
+            using var db = OpenDb();
+            return await db.ExecuteAsync("DELETE FROM deleted_files");
         }
 
         public async Task<List<FileMD5Entity>> GetRecentCapturesAsync(TimeSpan offset)
