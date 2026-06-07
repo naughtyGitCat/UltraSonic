@@ -26,6 +26,20 @@ public class MasterSyncController : ControllerBase
         return Ok(new { exists });
     }
 
+    /// <summary>
+    /// Record a deletion tombstone for an archived file (called by the Agent's archive
+    /// deletion watcher when a file is removed from disk, e.g. a bad shot deleted in
+    /// Explorer). Removes the catalog row and remembers it as deleted so it is NOT
+    /// re-uploaded on a later sync. No-op if the path isn't catalogued (temp files etc.).
+    /// </summary>
+    [HttpPost("tombstone")]
+    public async Task<IActionResult> Tombstone([FromBody] TombstoneRequest req)
+    {
+        if (req == null || string.IsNullOrWhiteSpace(req.Path)) return BadRequest(new { error = "path required" });
+        var tombstoned = await _md5Manager.RecordTombstoneByFullPathAsync(req.Path, req.AgentId);
+        return Ok(new { tombstoned, path = req.Path });
+    }
+
     [HttpPost("sync")]
     public async Task<IActionResult> Sync([FromBody] List<FileMD5Entity> captures, [FromQuery] bool is_republished = false)
     {
@@ -155,3 +169,6 @@ public class MasterSyncController : ControllerBase
         return Ok(new { message = "Master config saved" });
     }
 }
+
+/// <summary>Payload for <c>POST /api/master/tombstone</c>.</summary>
+public record TombstoneRequest(string Path, string? AgentId);
