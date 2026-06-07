@@ -88,50 +88,31 @@ final class PhotoLibraryService: @unchecked Sendable {
         return primary.map { [make($0)] } ?? []
     }
 
-    /// Stream original bytes to a temp file — safe for multi-GB videos (no full in-memory load).
-    /// `onDownloadProgress` fires (0…1) only while the original is being pulled from iCloud
-    /// (Optimize Storage placeholder); for an already-local original it isn't called.
+    /// Stream the original to a temp file. Uses PHAssetResourceManager.writeData, which
+    /// writes the resource straight to disk with NO in-memory buffering. (The previous
+    /// requestData + dataReceivedHandler approach accumulated a large MOV in memory and
+    /// got the app OOM-killed/jetsammed right as the iCloud download hit 100%.)
+    /// `onDownloadProgress` fires (0…1) while pulling an iCloud "Optimize Storage" original.
     func exportToTempFile(_ media: MediaAsset, onDownloadProgress: ((Double) -> Void)? = nil) async throws -> URL {
         let ext = (media.originalFilename as NSString).pathExtension
-        let tmp = TempStore.file(ext: ext)
-
-        FileManager.default.createFile(atPath: tmp.path, contents: nil)
-        let handle = try FileHandle(forWritingTo: tmp)
+        let tmp = TempStore.file(ext: ext) // must NOT pre-exist — writeData creates it
 
         let opts = PHAssetResourceRequestOptions()
         opts.isNetworkAccessAllowed = true // allow iCloud "Optimize Storage" placeholders to download
         if let onDownloadProgress { opts.progressHandler = onDownloadProgress }
 
         return try await withCheckedThrowingContinuation { cont in
-            // resume exactly once; capture any write failure (e.g. disk pressure) instead
-            // of letting the legacy FileHandle.write(_:) raise an uncatchable Obj-C
-            // exception that crashed the app right as a large download completed.
             var resumed = false
-            var writeError: Error?
-            func finish(_ result: Result<URL, Error>) {
+            PHAssetResourceManager.default().writeData(for: media.resource, toFile: tmp, options: opts) { error in
                 if resumed { return }
                 resumed = true
-                try? handle.close()
-                if case .failure = result { try? FileManager.default.removeItem(at: tmp) }
-                switch result {
-                case .success(let u): cont.resume(returning: u)
-                case .failure(let e): cont.resume(throwing: e)
+                if let error {
+                    try? FileManager.default.removeItem(at: tmp)
+                    cont.resume(throwing: error)
+                } else {
+                    cont.resume(returning: tmp)
                 }
             }
-            PHAssetResourceManager.default().requestData(
-                for: media.resource,
-                options: opts,
-                dataReceivedHandler: { chunk in
-                    guard writeError == nil else { return }
-                    do { try handle.write(contentsOf: chunk) }
-                    catch { writeError = error }
-                },
-                completionHandler: { error in
-                    if let writeError { finish(.failure(writeError)) }
-                    else if let error { finish(.failure(error)) }
-                    else { finish(.success(tmp)) }
-                }
-            )
         }
     }
 
