@@ -68,6 +68,7 @@ builder.Services.Configure<HostOptions>(opts =>
 builder.Services.AddHostedService<ScanAndPushJob>();
 builder.Services.AddHostedService<DeviceSyncAppleJob>();
 builder.Services.AddHostedService<DeviceSyncGenericJob>();
+builder.Services.AddHostedService<ArchiveDeletionWatcher>();
 
 var app = builder.Build();
 

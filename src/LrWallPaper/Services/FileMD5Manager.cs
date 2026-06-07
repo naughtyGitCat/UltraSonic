@@ -180,6 +180,22 @@ namespace LrWallPaper.Services
                 CREATE INDEX IF NOT EXISTS idx_archive_time ON archive_history(archived_at);
                 CREATE INDEX IF NOT EXISTS idx_archive_agent ON archive_history(agent_id);
             """);
+
+            // Deletion tombstones: when an archived file is intentionally removed (e.g.
+            // a bad shot deleted from the archive machine), we keep a record so it is NOT
+            // re-uploaded on a later (re-)sync. If the whole DB is lost, tombstones are
+            // lost too -> a full re-upload still recovers everything (the data-loss case).
+            db.Execute("""
+                CREATE TABLE IF NOT EXISTS deleted_files (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  filename TEXT NOT NULL,
+                  file_size INTEGER NOT NULL,
+                  file_md5 TEXT,
+                  agent_id TEXT,
+                  deleted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE INDEX IF NOT EXISTS idx_tombstone_name_size ON deleted_files(filename, file_size);
+            """);
         }
 
         public async Task SaveFileMD5Async(FileMD5Entity file) 
@@ -337,6 +353,13 @@ namespace LrWallPaper.Services
         public async Task<bool> FileExistsAsync(string filename, long fileSize)
         {
             using var db = OpenDb();
+
+            // 0. Tombstone: this file was intentionally deleted from the archive — treat
+            //    it as "exists" so it is NOT re-uploaded on a later (re-)sync.
+            var tomb = await db.ExecuteScalarAsync<int>(
+                "SELECT COUNT(1) FROM deleted_files WHERE filename = @0 AND file_size = @1", filename, fileSize);
+            if (tomb > 0) return true;
+
             // 1. Exact match: same filename + size
             var sql = "SELECT COUNT(1) FROM file_info WHERE filename = @0 AND file_size = @1";
             var count = await db.ExecuteScalarAsync<int>(sql, filename, fileSize);
@@ -362,6 +385,21 @@ namespace LrWallPaper.Services
             var pattern = $"{nameNoExt}(%){ext}";
             count = await db.ExecuteScalarAsync<int>(likeSql, pattern, fileSize);
             return count > 0;
+        }
+
+        /// Tombstone an archived file identified by its full path: copy its catalog row
+        /// into deleted_files, then remove the catalog row. No-op (returns false) if no
+        /// catalog row matches — so a stray delete of a temp/uncatalogued file is harmless.
+        public async Task<bool> RecordTombstoneByFullPathAsync(string fullPath, string? agentId)
+        {
+            using var db = OpenDb();
+            var inserted = await db.ExecuteAsync("""
+                INSERT INTO deleted_files (filename, file_size, file_md5, agent_id)
+                SELECT filename, file_size, file_md5, @1 FROM file_info WHERE fullpath = @0
+                """, fullPath, agentId);
+            if (inserted > 0)
+                await db.ExecuteAsync("DELETE FROM file_info WHERE fullpath = @0", fullPath);
+            return inserted > 0;
         }
 
         public async Task<List<FileMD5Entity>> GetRecentCapturesAsync(TimeSpan offset)
