@@ -88,7 +88,12 @@ final class SyncEngine: ObservableObject {
 
             // Throttle UI updates: a skip-heavy backfill churns thousands of assets fast;
             // updating @Published every file caused a render storm. Update every 25.
-            if processed % 25 == 0 { status = "Syncing… \(processed)/\(total)" }
+            // Show the current asset's capture date — since we go oldest→newest, it tells
+            // you roughly how far through time the sync has reached.
+            if processed % 25 == 0 {
+                let when = asset.creationDate.map { Self.fmt.string(from: $0) } ?? "—"
+                status = "\(when) · \(processed)/\(total)"
+            }
 
             // Resolve resources off the main actor too (PHAssetResource access is sync).
             // One unit normally; a Live Photo yields two (HEIC still + paired MOV).
