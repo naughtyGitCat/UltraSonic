@@ -70,9 +70,19 @@ struct ContentView: View {
                         stat("Failed", engine.failed, .red)
                     }
 
-                    Text(engine.status)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        if !engine.currentDate.isEmpty {
+                            Text(engine.currentDate)
+                                .font(.footnote.monospacedDigit())
+                                .foregroundStyle(.primary)
+                        }
+                        Text(engine.status)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                     if let last = engine.lastSync {
                         Text("Last sync: \(last.formatted())")
