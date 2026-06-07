@@ -127,10 +127,11 @@ final class SyncEngine: ObservableObject {
 
                 do {
                     let name = media.originalFilename
+                    let dateStr = Self.fmt.string(from: media.captureTime) // shown in every phase
                     // Small files come back in memory (no disk I/O); large ones on disk.
                     let payload = try await photos.export(media) { p in
                         Task { @MainActor [weak self] in
-                            self?.status = "⬇️ iCloud \(Int(p * 100))% — \(name)"
+                            self?.status = "\(dateStr) · ⬇️ iCloud \(Int(p * 100))% \(name)"
                         }
                     }
                     defer { if case .file(let u) = payload { try? FileManager.default.removeItem(at: u) } }
@@ -173,7 +174,7 @@ final class SyncEngine: ObservableObject {
                     )
                     try await client.ingest(payload, meta: meta)
                     uploaded += 1
-                    status = "⬆️ \(media.originalFilename)"
+                    status = "\(dateStr) · ⬆️ \(media.originalFilename)"
                     append("⬆️ \(media.originalFilename)")
                 } catch {
                     // A Stop request cancels the in-flight upload — don't count it as a
