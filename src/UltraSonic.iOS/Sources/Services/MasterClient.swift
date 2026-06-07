@@ -97,6 +97,46 @@ final class MasterClient {
         return comps.url
     }
 
+    /// Deletion tombstones (deleted archive files that are blocked from re-uploading).
+    func tombstones(page: Int = 1, pageSize: Int = 500) async -> [Tombstone] {
+        guard var comps = URLComponents(string: "\(baseURL)/api/master/tombstones") else { return [] }
+        comps.queryItems = [
+            URLQueryItem(name: "page", value: String(page)),
+            URLQueryItem(name: "pageSize", value: String(pageSize))
+        ]
+        guard let url = comps.url else { return [] }
+        struct Wrap: Decodable { let items: [Tombstone] }
+        do {
+            let (data, resp) = try await session.data(from: url)
+            guard (resp as? HTTPURLResponse)?.statusCode == 200 else { return [] }
+            return (try? JSONDecoder().decode(Wrap.self, from: data))?.items ?? []
+        } catch {
+            return []
+        }
+    }
+
+    /// Restore (un-tombstone) one file by id — it becomes eligible to re-upload again.
+    func restoreTombstone(id: Int) async -> Bool {
+        await delete("\(baseURL)/api/master/tombstones/\(id)")
+    }
+
+    /// Clear all tombstones (e.g. before a full data-loss re-upload).
+    func clearTombstones() async -> Bool {
+        await delete("\(baseURL)/api/master/tombstones")
+    }
+
+    private func delete(_ urlString: String) async -> Bool {
+        guard let url = URL(string: urlString) else { return false }
+        var req = URLRequest(url: url)
+        req.httpMethod = "DELETE"
+        do {
+            let (_, resp) = try await session.data(for: req)
+            return (200...299).contains((resp as? HTTPURLResponse)?.statusCode ?? 0)
+        } catch {
+            return false
+        }
+    }
+
     /// Dedupe precheck — same endpoint the Agent uses (filename + size).
     func fileExists(filename: String, size: Int64) async -> Bool {
         guard var comps = URLComponents(string: "\(baseURL)/api/master/file-exists") else { return false }
