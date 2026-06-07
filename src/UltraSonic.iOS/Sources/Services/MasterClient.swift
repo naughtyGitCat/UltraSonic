@@ -174,31 +174,33 @@ final class MasterClient {
             try? FileManager.default.removeItem(at: bodyURL)
         }
 
-        func field(_ name: String, _ value: String) {
-            body.write(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".utf8))
+        // Use the throwing FileHandle APIs (write(contentsOf:) / read(upToCount:)).
+        // The legacy write(_:) / readData(ofLength:) raise an uncatchable Obj-C
+        // exception on any failure (disk pressure, bad handle) — that crashed the app
+        // on large videos instead of surfacing as a retryable error.
+        func field(_ name: String, _ value: String) throws {
+            try body.write(contentsOf: Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".utf8))
         }
 
-        field("fileName", meta.fileName)
-        if let v = meta.cameraMaker { field("cameraMaker", v) }
-        if let v = meta.cameraModel { field("cameraModel", v) }
-        if let v = meta.lensModel { field("lensModel", v) }
-        field("captureTime", Self.captureFmt.string(from: meta.captureTime))
-        if let v = meta.latitude { field("latitude", String(v)) }
-        if let v = meta.longitude { field("longitude", String(v)) }
-        field("sourceType", meta.sourceType)
-        field("agentId", meta.agentId)
+        try field("fileName", meta.fileName)
+        if let v = meta.cameraMaker { try field("cameraMaker", v) }
+        if let v = meta.cameraModel { try field("cameraModel", v) }
+        if let v = meta.lensModel { try field("lensModel", v) }
+        try field("captureTime", Self.captureFmt.string(from: meta.captureTime))
+        if let v = meta.latitude { try field("latitude", String(v)) }
+        if let v = meta.longitude { try field("longitude", String(v)) }
+        try field("sourceType", meta.sourceType)
+        try field("agentId", meta.agentId)
 
         // File part: header, streamed bytes, trailing boundary.
-        body.write(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(meta.fileName)\"\r\nContent-Type: application/octet-stream\r\n\r\n".utf8))
+        try body.write(contentsOf: Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(meta.fileName)\"\r\nContent-Type: application/octet-stream\r\n\r\n".utf8))
 
         let input = try FileHandle(forReadingFrom: fileURL)
         defer { try? input.close() }
-        while true {
-            let chunk = input.readData(ofLength: 1 << 20) // 1 MB
-            if chunk.isEmpty { break }
-            body.write(chunk)
+        while let chunk = try input.read(upToCount: 1 << 20), !chunk.isEmpty { // 1 MB
+            try body.write(contentsOf: chunk)
         }
-        body.write(Data("\r\n--\(boundary)--\r\n".utf8))
+        try body.write(contentsOf: Data("\r\n--\(boundary)--\r\n".utf8))
         try? body.close()
 
         let (_, resp) = try await session.upload(for: req, fromFile: bodyURL)

@@ -103,18 +103,33 @@ final class PhotoLibraryService: @unchecked Sendable {
         if let onDownloadProgress { opts.progressHandler = onDownloadProgress }
 
         return try await withCheckedThrowingContinuation { cont in
+            // resume exactly once; capture any write failure (e.g. disk pressure) instead
+            // of letting the legacy FileHandle.write(_:) raise an uncatchable Obj-C
+            // exception that crashed the app right as a large download completed.
+            var resumed = false
+            var writeError: Error?
+            func finish(_ result: Result<URL, Error>) {
+                if resumed { return }
+                resumed = true
+                try? handle.close()
+                if case .failure = result { try? FileManager.default.removeItem(at: tmp) }
+                switch result {
+                case .success(let u): cont.resume(returning: u)
+                case .failure(let e): cont.resume(throwing: e)
+                }
+            }
             PHAssetResourceManager.default().requestData(
                 for: media.resource,
                 options: opts,
-                dataReceivedHandler: { chunk in handle.write(chunk) },
+                dataReceivedHandler: { chunk in
+                    guard writeError == nil else { return }
+                    do { try handle.write(contentsOf: chunk) }
+                    catch { writeError = error }
+                },
                 completionHandler: { error in
-                    try? handle.close()
-                    if let error {
-                        try? FileManager.default.removeItem(at: tmp)
-                        cont.resume(throwing: error)
-                    } else {
-                        cont.resume(returning: tmp)
-                    }
+                    if let writeError { finish(.failure(writeError)) }
+                    else if let error { finish(.failure(error)) }
+                    else { finish(.success(tmp)) }
                 }
             )
         }
