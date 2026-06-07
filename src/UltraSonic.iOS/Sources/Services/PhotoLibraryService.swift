@@ -93,9 +93,7 @@ final class PhotoLibraryService: @unchecked Sendable {
     /// (Optimize Storage placeholder); for an already-local original it isn't called.
     func exportToTempFile(_ media: MediaAsset, onDownloadProgress: ((Double) -> Void)? = nil) async throws -> URL {
         let ext = (media.originalFilename as NSString).pathExtension
-        let tmp = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension(ext)
+        let tmp = TempStore.file(ext: ext)
 
         FileManager.default.createFile(atPath: tmp.path, contents: nil)
         let handle = try FileHandle(forWritingTo: tmp)

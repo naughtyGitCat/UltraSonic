@@ -164,8 +164,9 @@ final class MasterClient {
         req.httpMethod = "POST"
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
-        // Assemble the multipart body in a temp file.
-        let bodyURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        // Assemble the multipart body in a temp file (in the shared scratch dir so a
+        // jetsam mid-upload can't leak it permanently — it's purged next launch/sync).
+        let bodyURL = TempStore.file()
         FileManager.default.createFile(atPath: bodyURL.path, contents: nil)
         let body = try FileHandle(forWritingTo: bodyURL)
         defer {

@@ -49,6 +49,7 @@ final class SyncEngine: ObservableObject {
         defer { isRunning = false }
 
         total = 0; processed = 0; uploaded = 0; skippedExisting = 0; skippedFiltered = 0; failed = 0
+        TempStore.purge() // reclaim any scratch files a previous crashed/jetsammed run leaked
         status = "Requesting photo access…"
 
         guard await photos.requestAuthorization() else {
