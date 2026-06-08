@@ -420,10 +420,16 @@ React95 风格 SPA，三个标签页：
     "LocalScan": { "RootDirectories": [], "SkipDirectories": [] },
     "AppleImport": { "TempDirectory": "", "ArchiveDirectory": "" },
     "Lightroom": { "CatalogPath": "" },
-    "ArchivePaths": { "Current": "", "History": "" }
+    "ArchivePaths": { "Current": "", "History": "" },
+    "MobileIngest": { "TargetAgentId": "" }
   }
 }
 ```
+
+- **`MobileIngest.TargetAgentId`**: iOS App 上传走 `POST /api/master/ingest`，Master **不落盘、只代理**，必须知道把文件转发给**哪台 Agent 存盘**。此项填该 Agent 的 id（即照片库所在的存档机，如归档到 `D:\Photograph` 的那台）。
+  - 解析规则（`MobileIngestController.ResolveTargetAgentAsync`）：配了 → 用该 id；没配但只注册 1 台 Agent → 自动用那台；**没配且有多台 Agent → 无法决定 → 返回 503**。
+  - 它还决定 iOS 文件落在哪台机的磁盘、以及 catalog 的 `agent_id`（`GET /api/image` 浏览时据此把取图请求转回正确的 Agent）。
+  - ⚠️ **重新部署 Master 若覆盖了 `appsettings.json` 会丢失此项** → 多 Agent 环境下 iOS 上传立刻全 503。部署后需重新写回（或保留旧 appsettings）。可通过前端 Node Config 或 `PUT /api/master/config` 改，appsettings 热重载即时生效、无需重启。
 
 ### 8.2 Agent `appsettings.json`
 
