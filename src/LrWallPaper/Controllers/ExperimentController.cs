@@ -358,11 +358,14 @@ public sealed class HashingReadStream : Stream
         System.Security.Cryptography.IncrementalHash.CreateHash(System.Security.Cryptography.HashAlgorithmName.MD5);
     private string? _hex;
     public HashingReadStream(Stream inner) { _inner = inner; }
-    public string Md5Hex => _hex ??= Convert.ToHexString(_hash.GetHashAndReset()).ToLowerInvariant();
+    // Finalize at EOF (n==0), BEFORE HttpClient disposes the request content
+    // (which disposes this stream + the hash). Md5Hex returns the captured value.
+    private void Finalize0(int n) { if (n == 0 && _hex is null) _hex = Convert.ToHexString(_hash.GetHashAndReset()).ToLowerInvariant(); }
+    public string Md5Hex => _hex ?? throw new InvalidOperationException("stream not fully read yet");
     public override int Read(byte[] buffer, int offset, int count)
-    { int n = _inner.Read(buffer, offset, count); if (n > 0) _hash.AppendData(buffer, offset, n); return n; }
+    { int n = _inner.Read(buffer, offset, count); if (n > 0) _hash.AppendData(buffer, offset, n); else Finalize0(n); return n; }
     public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
-    { int n = await _inner.ReadAsync(buffer, ct); if (n > 0) _hash.AppendData(buffer.Span[..n]); return n; }
+    { int n = await _inner.ReadAsync(buffer, ct); if (n > 0) _hash.AppendData(buffer.Span[..n]); else Finalize0(n); return n; }
     public override bool CanRead => true;
     public override bool CanSeek => false;
     public override bool CanWrite => false;
