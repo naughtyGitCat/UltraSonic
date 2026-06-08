@@ -85,20 +85,23 @@ public static class MediaHelpers
     {
         try
         {
+            // QuickTime date strings are English-formatted ("Mon Dec 29 ...").
+            // Must parse with InvariantCulture — on a zh-CN system CurrentCulture
+            // expects 周一/十二月 and ParseExact throws, so the date was lost and
+            // CaptureTime fell back to the file's mtime (wrong, esp. after a
+            // cross-node transfer that rewrites mtime). Use Invariant everywhere.
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
             var metaDate = qtMeta?.GetDescription(QuickTimeMetadataHeaderDirectory.TagCreationDate);
             if (!string.IsNullOrEmpty(metaDate))
-                return DateTime.ParseExact(metaDate, "ddd MMM dd HH:mm:ss zzz yyyy",
-                    System.Globalization.CultureInfo.CurrentCulture);
+                return DateTime.ParseExact(metaDate, "ddd MMM dd HH:mm:ss zzz yyyy", inv);
 
             var trackDate = qtTrack?.GetDescription(QuickTimeTrackHeaderDirectory.TagCreated);
             if (!string.IsNullOrEmpty(trackDate))
-                return DateTime.ParseExact(trackDate, "ddd MMM dd HH:mm:ss yyyy",
-                    System.Globalization.CultureInfo.CurrentCulture).ToLocalTime();
+                return DateTime.ParseExact(trackDate, "ddd MMM dd HH:mm:ss yyyy", inv).ToLocalTime();
 
             var fileDate = fileMeta?.GetDescription(FileMetadataDirectory.TagFileModifiedDate);
             if (!string.IsNullOrEmpty(fileDate))
-                return DateTime.ParseExact(fileDate, "ddd MMM dd HH:mm:ss zzz yyyy",
-                    System.Globalization.CultureInfo.CurrentCulture);
+                return DateTime.ParseExact(fileDate, "ddd MMM dd HH:mm:ss zzz yyyy", inv);
         }
         catch { }
         return null;
