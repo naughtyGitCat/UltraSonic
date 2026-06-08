@@ -103,6 +103,26 @@ thousands / keep ~zero MOVs" into "transfer only the genuinely new captures."
   `/api/master/sync` path — so the iOS upload is indistinguishable from a device-sync record
   and `agent_id` points at the agent that physically holds the file (required for the image proxy).
 
+### `UltraSonic:MobileIngest:TargetAgentId` (Master config — required for multi-Agent)
+
+Because Master only proxies (never stores), it must know **which Agent receives the iOS
+upload for disk storage**. `TargetAgentId` = that Agent's id (the photo-library machine,
+e.g. the Agent archiving to `D:\Photograph`).
+
+Resolution (`MobileIngestController.ResolveTargetAgentAsync`):
+- set → forward to that Agent id;
+- unset but exactly **one** Agent registered → use it;
+- unset with **multiple** Agents → can't decide → **HTTP 503** (`no archive agent available`),
+  and the iOS app logs every upload as `MasterClientError error 0`.
+
+It also fixes where the file lands and the catalog `agent_id` (which the `GET /api/image`
+proxy uses to fetch the file back from the right Agent).
+
+> ⚠️ **A Master redeploy that overwrites `appsettings.json` drops this value** → in a
+> multi-Agent setup all iOS uploads immediately 503. Re-apply it after deploy (front-end
+> Node Config, `PUT /api/master/config`, or edit `appsettings.json` — it hot-reloads, no
+> restart needed), or preserve the old `appsettings.json` across deploys.
+
 ## Key technical decisions / requirements
 
 1. **Filter on-device, upload minimally.** `PHFetchOptions` predicate:
