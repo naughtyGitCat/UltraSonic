@@ -1,11 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Capture, FilterOptions, FolderSummary } from '../types';
-import { toOpts, MediaThumbnail } from '../utils';
-import { Button, Select, TextInput, Modal } from '../ui';
+import { toOpts, MediaThumbnail, formatFileSize } from '../utils';
+import { Button, Select, TextInput, Checkbox, Modal } from '../ui';
 import FolderTree from './FolderTree';
 
 interface Props {
   filterOptions: FilterOptions;
+}
+
+interface TransferStatus {
+  state: string; total: number; processed: number; moved: number; skipped: number;
+  failed: number; movedBytes: number; currentFile?: string | null; failures?: string[];
 }
 
 export default function FoldersTab({ filterOptions }: Props) {
@@ -16,6 +21,34 @@ export default function FoldersTab({ filterOptions }: Props) {
   const [moveTarget, setMoveTarget] = useState('');
   const [showMoveDialog, setShowMoveDialog] = useState(false);
   const [selectedFileIds, setSelectedFileIds] = useState<Set<number>>(new Set());
+
+  // cross-node transfer
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [agentOpts, setAgentOpts] = useState<{ label: string; value: string }[]>([]);
+  const [xSrc, setXSrc] = useState('');
+  const [xAgent, setXAgent] = useState('');
+  const [xDst, setXDst] = useState('');
+  const [xDelete, setXDelete] = useState(true);
+  const [xStatus, setXStatus] = useState<TransferStatus | null>(null);
+  const pollRef = useRef<number | null>(null);
+
+  const pollStatus = () => {
+    fetch('/api/experiment/transfer/status').then(r => r.json()).then(setXStatus).catch(() => {});
+  };
+  useEffect(() => {
+    // load agents (id->name) for the target dropdown
+    fetch('/api/agent/status').then(r => r.json()).then((d: Array<{id:string;name:string}>) =>
+      setAgentOpts(d.filter(a => a.id !== 'local').map(a => ({ label: `${a.name} (${a.id.slice(0,8)})`, value: a.id })))
+    ).catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (!showTransfer) { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } return; }
+    pollStatus();
+    pollRef.current = window.setInterval(pollStatus, 2000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [showTransfer]);
+
+  const xRunning = xStatus?.state === 'running';
 
   const fetchFolders = () => {
     const params = folderAgent ? `?agentId=${encodeURIComponent(folderAgent)}` : '';
@@ -38,6 +71,10 @@ export default function FoldersTab({ filterOptions }: Props) {
         <div className="field"><label>Source</label>
           <Select options={toOpts(filterOptions.agentIds)} value={folderAgent} onChange={setFolderAgent} width={160} /></div>
         <Button size="sm" onClick={fetchFolders}>Refresh</Button>
+        <Button size="sm" onClick={() => {
+          const pre = selectedFolder?.filePath || '';
+          setXSrc(pre); setXDst(pre.replace(/^[A-Za-z]:/, 'J:')); setShowTransfer(true);
+        }}>Transfer to node →</Button>
         {selectedFolder && <>
           <span className="sep" />
           <Button size="sm" variant="primary" onClick={() => setShowMoveDialog(true)} disabled={selectedFileIds.size === 0}>
@@ -74,6 +111,65 @@ export default function FoldersTab({ filterOptions }: Props) {
           ) : <div className="faint" style={{ padding: 40, textAlign: 'center' }}>Select a folder</div>}
         </div>
       </div>
+
+      {showTransfer && (
+        <Modal title="Transfer folder to another node" onClose={() => setShowTransfer(false)} width="560px">
+          <div className="modal-body">
+            <div className="col" style={{ gap: 10 }}>
+              <div className="field" style={{ justifyContent: 'space-between' }}>
+                <label style={{ width: 90 }}>Source path</label>
+                <TextInput value={xSrc} onChange={e => setXSrc(e.target.value)}
+                  placeholder="D:\Photograph\2025" style={{ flex: 1 }} />
+              </div>
+              <div className="field" style={{ justifyContent: 'space-between' }}>
+                <label style={{ width: 90 }}>Target node</label>
+                <Select options={[{ label: '— select agent —', value: '' }, ...agentOpts]}
+                  value={xAgent} onChange={setXAgent} />
+              </div>
+              <div className="field" style={{ justifyContent: 'space-between' }}>
+                <label style={{ width: 90 }}>Target path</label>
+                <TextInput value={xDst} onChange={e => setXDst(e.target.value)}
+                  placeholder="J:\Photograph\2025" style={{ flex: 1 }} />
+              </div>
+              <Checkbox label="Delete source after verified copy (move)" checked={xDelete} onChange={() => setXDelete(v => !v)} />
+              <div className="faint" style={{ fontSize: 11 }}>
+                Streams via the target agent with end-to-end MD5 verify. Already-present files
+                (same path + size) are skipped, so a stopped transfer resumes by starting again.
+              </div>
+
+              {xStatus && xStatus.state !== 'idle' && (
+                <div className="card card-2" style={{ marginTop: 4 }}>
+                  <div className="row" style={{ justifyContent: 'space-between', fontSize: 12 }}>
+                    <span><strong>{xStatus.state}</strong></span>
+                    <span className="muted">{xStatus.processed}/{xStatus.total} · moved {xStatus.moved} · skipped {xStatus.skipped} · failed {xStatus.failed} · {formatFileSize(xStatus.movedBytes)}</span>
+                  </div>
+                  {xStatus.total > 0 && (
+                    <div style={{ height: 6, background: 'var(--surface-3)', borderRadius: 3, marginTop: 6, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${Math.round(xStatus.processed / xStatus.total * 100)}%`, background: 'var(--accent)' }} />
+                    </div>
+                  )}
+                  {xStatus.currentFile && <div className="faint" style={{ fontSize: 10, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{xStatus.currentFile}</div>}
+                  {!!xStatus.failures?.length && <div style={{ fontSize: 10, color: 'var(--danger)', marginTop: 4 }}>{xStatus.failures.length} failure(s): {xStatus.failures[0]}</div>}
+                </div>
+              )}
+
+              <div className="row" style={{ justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+                <Button variant="ghost" onClick={() => setShowTransfer(false)}>Close</Button>
+                {xRunning
+                  ? <Button variant="danger" onClick={() => {
+                      fetch('/api/experiment/transfer/stop', { method: 'POST' }).then(pollStatus);
+                    }}>Stop</Button>
+                  : <Button variant="primary" disabled={!xSrc || !xAgent || !xDst} onClick={() => {
+                      fetch('/api/experiment/transfer', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ SourceRoot: xSrc, TargetAgentId: xAgent, TargetRoot: xDst, DeleteSource: xDelete }) })
+                        .then(r => r.json()).then(() => pollStatus())
+                        .catch(err => alert('Start failed: ' + err.message));
+                    }}>{xStatus && xStatus.state === 'stopped' ? 'Resume' : 'Start'}</Button>}
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {showMoveDialog && (
         <Modal title="Move Files" onClose={() => setShowMoveDialog(false)} width="440px">

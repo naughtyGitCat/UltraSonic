@@ -453,6 +453,21 @@ app.MapPost("/api/agent/ingest", async (HttpContext ctx, AgentState agentState, 
     }
 });
 
+// Lightweight stat for transfer skip/resume: does this path exist locally and
+// at what size. Cheap (no hashing) — lets Master skip re-sending files already
+// present on the target with a matching size.
+app.MapGet("/api/agent/stat", (string path) =>
+{
+    if (string.IsNullOrEmpty(path)) return Results.BadRequest("path required");
+    try
+    {
+        var fi = new FileInfo(path);
+        return fi.Exists ? Results.Ok(new { exists = true, size = fi.Length })
+                         : Results.Ok(new { exists = false, size = 0L });
+    }
+    catch { return Results.Ok(new { exists = false, size = 0L }); }
+});
+
 // Config read/write endpoints
 app.MapGet("/api/agent/config", () =>
 {

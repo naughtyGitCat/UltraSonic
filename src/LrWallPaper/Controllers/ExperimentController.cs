@@ -189,6 +189,18 @@ public class ExperimentController : ControllerBase
     public IActionResult TransferStatus() =>
         Ok(_transfer ?? new TransferState { State = "idle" });
 
+    // Graceful stop: the run finishes the in-flight file, then halts at the next
+    // loop boundary (state -> "stopped"). Re-POST /transfer resumes — already-
+    // transferred files are skipped (target exists + same size), so stop == pause.
+    [HttpPost("transfer/stop")]
+    public IActionResult StopTransfer()
+    {
+        if (_transfer is not { State: "running" })
+            return Ok(new { message = "no running transfer" });
+        _transfer.StopRequested = true;
+        return Ok(new { message = "stop requested", _transfer.Processed, _transfer.Total });
+    }
+
     [HttpPost("transfer")]
     public IActionResult StartTransfer([FromBody] TransferRequest req)
     {
@@ -218,6 +230,7 @@ public class ExperimentController : ControllerBase
 
             foreach (var src in files)
             {
+                if (st.StopRequested) { st.State = "stopped"; break; }
                 st.CurrentFile = src;
                 try
                 {
@@ -231,6 +244,34 @@ public class ExperimentController : ControllerBase
                     // delete). Normalizing makes the repoint land so no tombstone.
                     var srcNorm = Path.GetFullPath(src);
                     var targetPath = Path.GetFullPath(Path.Combine(req.TargetRoot, rel));
+                    var srcSize = new FileInfo(src).Length;
+
+                    // Skip if the target already holds this file with the same size
+                    // (idempotency / resume after a stop). Only WE write to the
+                    // target tree, so same-path + same-size == same file. Still
+                    // finalize the catalog repoint + source delete so a crash
+                    // between "bytes landed" and "repoint" self-heals on re-run.
+                    bool already = false;
+                    try
+                    {
+                        var statUrl = $"{target.Endpoint.TrimEnd('/')}/api/agent/stat?path={Uri.EscapeDataString(targetPath)}";
+                        var stat = await client.GetFromJsonAsync<StatResult>(statUrl);
+                        if (stat is { exists: true } && stat.size == srcSize) already = true;
+                    }
+                    catch { /* stat unavailable -> fall through to a full transfer */ }
+
+                    if (already)
+                    {
+                        await _md5Manager.RepointFileAsync(srcNorm, targetPath, req.TargetAgentId);
+                        if (req.DeleteSource)
+                        {
+                            try { System.IO.File.Delete(src); }
+                            catch (Exception ex) { _logger.LogWarning(ex, "transfer: source delete failed {Src}", src); }
+                        }
+                        st.Skipped++; st.MovedBytes += srcSize;
+                        continue;
+                    }
+
                     var url = $"{target.Endpoint.TrimEnd('/')}/api/agent/receive?path={Uri.EscapeDataString(targetPath)}";
 
                     string srcMd5;
@@ -265,7 +306,8 @@ public class ExperimentController : ControllerBase
                 }
                 finally { st.Processed++; }
             }
-            st.State = st.Failed == 0 ? "completed" : "completed_with_errors";
+            if (st.State != "stopped")
+                st.State = st.Failed == 0 ? "completed" : "completed_with_errors";
             st.CurrentFile = null;
             st.EndedAt = DateTime.Now;
         }
@@ -345,8 +387,10 @@ public class TransferState
     public int Total { get; set; }
     public int Processed { get; set; }
     public int Moved { get; set; }
+    public int Skipped { get; set; }
     public int Failed { get; set; }
     public long MovedBytes { get; set; }
+    public volatile bool StopRequested;
     public string? CurrentFile { get; set; }
     public string? LastError { get; set; }
     public DateTime? StartedAt { get; set; }
@@ -356,6 +400,7 @@ public class TransferState
 }
 
 public record ReceiveResult(bool ok, string md5, long size, string? path, string? error);
+public record StatResult(bool exists, long size);
 
 // Wraps a read stream and computes MD5 of everything read. Read Md5Hex after the
 // stream is fully consumed (i.e. after the HTTP POST completes).
