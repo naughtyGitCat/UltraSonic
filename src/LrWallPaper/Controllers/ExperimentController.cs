@@ -222,7 +222,15 @@ public class ExperimentController : ControllerBase
                 try
                 {
                     var rel = Path.GetRelativePath(req.SourceRoot, src);
-                    var targetPath = Path.Combine(req.TargetRoot, rel);
+                    // Normalize separators to the OS-canonical form (backslash on
+                    // Windows). Directory.GetFiles on a forward-slash root yields
+                    // mixed separators; the catalog stores backslash. Without this,
+                    // RepointFileAsync's WHERE fullpath=@src matches 0 rows, the row
+                    // stays at the old path, and the archive deletion-watcher
+                    // tombstones it when the source is deleted (treats a move as a
+                    // delete). Normalizing makes the repoint land so no tombstone.
+                    var srcNorm = Path.GetFullPath(src);
+                    var targetPath = Path.GetFullPath(Path.Combine(req.TargetRoot, rel));
                     var url = $"{target.Endpoint.TrimEnd('/')}/api/agent/receive?path={Uri.EscapeDataString(targetPath)}";
 
                     string srcMd5;
@@ -242,7 +250,7 @@ public class ExperimentController : ControllerBase
                     if (rr is null || !rr.ok || !string.Equals(rr.md5, srcMd5, StringComparison.OrdinalIgnoreCase))
                     { st.Failed++; st.AddFailure($"{src} MD5 mismatch (src={srcMd5} dst={rr?.md5})"); continue; }
 
-                    await _md5Manager.RepointFileAsync(src, targetPath, req.TargetAgentId);
+                    await _md5Manager.RepointFileAsync(srcNorm, targetPath, req.TargetAgentId);
                     if (req.DeleteSource)
                     {
                         try { System.IO.File.Delete(src); }
