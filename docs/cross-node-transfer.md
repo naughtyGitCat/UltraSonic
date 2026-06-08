@@ -9,13 +9,32 @@ from BARONCELLI to Z690. The prior `move` endpoints were same-node only.
 - **Agent** `POST /api/agent/receive?path=<targetFullPath>` — streams the
   request body to disk while hashing (atomic `.part` → final), returns
   `{ ok, md5, size, path }`. Multi-GB safe (no full buffering).
+- **Agent** `GET /api/agent/stat?path=<targetFullPath>` — cheap
+  `{ exists, size }` (no hashing). Lets Master skip files already present
+  on the target.
 - **Master** `POST /api/experiment/transfer`
   `{ SourceRoot, TargetAgentId, TargetRoot, DeleteSource }` — disk-driven
   enumeration of `SourceRoot` (master-local), streams each file to the
   target agent's `/api/agent/receive`, hashes in flight, verifies against
   the agent's returned MD5, re-points the catalog row, then (optionally)
   deletes the source — **only after a verified content match**. Runs in
-  the background; `GET /api/experiment/transfer/status` reports progress.
+  the background.
+- **Master** `GET /api/experiment/transfer/status` — `{ state, total,
+  processed, moved, skipped, failed, movedBytes, currentFile, failures }`.
+- **Master** `POST /api/experiment/transfer/stop` — graceful stop at the
+  next file boundary (`state -> stopped`).
+- **UI**: Folders tab → "Transfer to node →" (source path, target agent,
+  target path, delete-source) with a live progress bar and Stop/Resume.
+
+### Skip-existing & stop/resume (implemented)
+
+Before sending each file, Master stats the target (`/api/agent/stat`); if
+it already exists with the **same size**, the byte transfer is skipped —
+only WE write to the target tree, so same-path + same-size == same file.
+The catalog repoint + source delete still run, so a crash between
+"bytes landed" and "repoint" self-heals on re-run. A `stopped` transfer
+**resumes** by simply POSTing `/transfer` again: done files are skipped,
+so **stop == pause**.
 
 ## Why it goes *through the agent* (not SMB admin shares)
 
@@ -121,12 +140,24 @@ tombstones + full Z690 rescan.)
 6. If the source had uncatalogued files, ensure the dest agent's
    `ScanPaths` includes the archive root so they get registered.
 
+## Gotcha: scan whitelist vs. moved files
+
+The migration moves **every** file on disk, but the destination agent's
+scan only *catalogs* extensions in `Agent:SupportedExtensions` (default
+in `ScanAndPushJob.DefaultExtensions`). In the 2025 move, 1773 `.cr3`
+(Canon raw) + 4 `.aac` landed on Z690 but weren't catalogued because the
+whitelist had `.cr2` but not `.cr3`/`.aac` — a pre-existing whitelist
+gap, **not** data loss (files are on disk, just not in the gallery).
+Fixed by adding `.cr3`/`.aac` to the whitelist (code default + both
+agents' `appsettings.json`) and re-scanning. Lesson: the synchronous
+repoint moves catalogued rows regardless of extension; only the
+**backstop scan** for previously-uncatalogued files is whitelist-bound,
+so keep `SupportedExtensions` complete.
+
 ## Possible future hardening
 
 - Defensively clear any pre-existing tombstone for a moved file's
   name+size during the transfer (belt-and-suspenders; repoint-before-
   delete already prevents new ones).
-- Skip re-sending files already present on the target with matching
-  size+md5 (resume/idempotency for interrupted transfers).
-- A `POST /api/experiment/transfer/stop` to cancel an in-flight run
-  (today: restart Master to abort the background task).
+- Verify skip-existing by md5 (not just size) when paranoid — today size
+  match is trusted because only this transfer writes the target tree.

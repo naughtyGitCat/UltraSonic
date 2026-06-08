@@ -19,8 +19,8 @@ public class ScanAndPushJob : BackgroundService
     private static readonly HashSet<string> DefaultExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".heic",
-        ".dng", ".cr2", ".nef", ".arw",
-        ".mp4", ".mov", ".avi", ".mkv", ".mts"
+        ".dng", ".cr2", ".cr3", ".nef", ".arw",
+        ".mp4", ".mov", ".avi", ".mkv", ".mts", ".aac"
     };
 
     public ScanAndPushJob(ILogger<ScanAndPushJob> logger, IConfiguration configuration, AgentState agentState)
