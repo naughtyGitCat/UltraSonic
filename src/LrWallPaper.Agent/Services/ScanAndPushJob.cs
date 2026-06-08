@@ -49,6 +49,12 @@ public class ScanAndPushJob : BackgroundService
             var agentId = _configuration["Agent:AgentId"];
             var masterEndpoint = _configuration["Agent:MasterEndpoint"] ?? "http://localhost:5281";
             var scanPaths = _configuration.GetSection("Agent:ScanPaths").Get<string[]>() ?? [];
+            // Path prefixes to skip during scan (e.g. the iCloud Photos sync
+            // folder, which duplicates what Apple-device import already archives).
+            var excludePaths = (_configuration.GetSection("Agent:ExcludePaths").Get<string[]>() ?? [])
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Select(p => Path.GetFullPath(p).TrimEnd('\\'))
+                .ToArray();
             var intervalMinutes = _configuration.GetValue("Agent:ScanIntervalMinutes", 60);
             var supportedExts = _configuration.GetSection("Agent:SupportedExtensions").Get<string[]>();
             var extensions = supportedExts != null && supportedExts.Length > 0
@@ -96,6 +102,15 @@ public class ScanAndPushJob : BackgroundService
                 foreach (var filePath in EnumerateImageFiles(scanPath, extensions))
                 {
                     if (stoppingToken.IsCancellationRequested) break;
+
+                    // Skip excluded subtrees (e.g. iCloud Photos sync folder)
+                    if (excludePaths.Length > 0)
+                    {
+                        var full = Path.GetFullPath(filePath);
+                        if (excludePaths.Any(ex => full.StartsWith(ex + "\\", StringComparison.OrdinalIgnoreCase)
+                                                || full.Equals(ex, StringComparison.OrdinalIgnoreCase)))
+                            continue;
+                    }
 
                     try
                     {
