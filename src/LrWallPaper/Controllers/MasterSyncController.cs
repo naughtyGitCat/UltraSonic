@@ -26,6 +26,44 @@ public class MasterSyncController : ControllerBase
         return Ok(new { exists });
     }
 
+    /// <summary>
+    /// Record a deletion tombstone for an archived file (called by the Agent's archive
+    /// deletion watcher when a file is removed from disk, e.g. a bad shot deleted in
+    /// Explorer). Removes the catalog row and remembers it as deleted so it is NOT
+    /// re-uploaded on a later sync. No-op if the path isn't catalogued (temp files etc.).
+    /// </summary>
+    [HttpPost("tombstone")]
+    public async Task<IActionResult> Tombstone([FromBody] TombstoneRequest req)
+    {
+        if (req == null || string.IsNullOrWhiteSpace(req.Path)) return BadRequest(new { error = "path required" });
+        var tombstoned = await _md5Manager.RecordTombstoneByFullPathAsync(req.Path, req.AgentId);
+        return Ok(new { tombstoned, path = req.Path });
+    }
+
+    /// <summary>List deletion tombstones (deleted archive files that won't be re-uploaded).</summary>
+    [HttpGet("tombstones")]
+    public async Task<IActionResult> GetTombstones([FromQuery] int page = 1, [FromQuery] int pageSize = 100)
+    {
+        var (items, total) = await _md5Manager.GetTombstonesAsync(page, pageSize);
+        return Ok(new { total, page, pageSize, items });
+    }
+
+    /// <summary>Restore one tombstone by id — the file becomes eligible to re-upload again.</summary>
+    [HttpDelete("tombstones/{id}")]
+    public async Task<IActionResult> DeleteTombstone(long id)
+    {
+        var ok = await _md5Manager.DeleteTombstoneAsync(id);
+        return ok ? Ok(new { restored = true, id }) : NotFound(new { error = "tombstone not found" });
+    }
+
+    /// <summary>Clear all tombstones (e.g. before a full data-loss re-upload).</summary>
+    [HttpDelete("tombstones")]
+    public async Task<IActionResult> ClearTombstones()
+    {
+        var cleared = await _md5Manager.ClearTombstonesAsync();
+        return Ok(new { cleared });
+    }
+
     [HttpPost("sync")]
     public async Task<IActionResult> Sync([FromBody] List<FileMD5Entity> captures, [FromQuery] bool is_republished = false)
     {
@@ -155,3 +193,6 @@ public class MasterSyncController : ControllerBase
         return Ok(new { message = "Master config saved" });
     }
 }
+
+/// <summary>Payload for <c>POST /api/master/tombstone</c>.</summary>
+public record TombstoneRequest(string Path, string? AgentId);

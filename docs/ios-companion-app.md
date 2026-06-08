@@ -56,7 +56,15 @@ iOS's **PhotoKit** (`PHAsset`/`PHPhotoLibrary`) exposes everything we need
 **without reading file contents at all**:
 
 - `PHAsset.sourceType` → `.typeUserLibrary` vs `.typeCloudShared` /
-  `.typeiTunesSynced` — directly distinguishes camera-captured from received.
+  `.typeiTunesSynced` — excludes iCloud-shared and iTunes-synced content. **Note:**
+  `.typeUserLibrary` means "in the user's library", **not** "shot by this device" —
+  it still includes AirDrop'd / third-party-app saves / downloads (e.g.
+  `image-2025-09-06-10:01:24-114.jpg`, `qq_pic…`, UUIDs) **and** non-iPhone gear (DJI
+  drone, DSLR). This app ingests **iPhone captures only** — other cameras reach the
+  archive via the Agent's removable-device (SD card) scan, not the phone. So we gate on
+  the `IMG_` filename (cheap, no download) and confirm EXIF `Make == "Apple"` after
+  download (catches e.g. a Canon photo also named `IMG_`), mirroring the AFC path's
+  "shot by this device" check.
 - Camera/capture metadata, `creationDate`, location, dimensions, duration,
   `mediaType`, `mediaSubtypes` (e.g. Live Photo, HDR) — all queryable.
 - `isFromMyDevice`-style filtering via `PHFetchOptions` predicates.
@@ -73,24 +81,27 @@ thousands / keep ~zero MOVs" into "transfer only the genuinely new captures."
 ## Architecture
 
 ```
-┌──────────────────────────┐         WiFi / LAN HTTP          ┌────────────────────────┐
-│  iOS Companion App        │  ──────────────────────────────▶ │  Master (LrWallPaper)   │
-│  (Swift, PhotoKit)        │   POST new camera assets +        │  :5281                  │
-│                           │        metadata                   │  existing ingest API    │
-│  - PHAsset fetch+filter   │                                   │  /api/master/sync       │
-│  - dedupe vs Master       │  ◀── GET /api/master/file-exists  │  (+ new upload endpoint)│
-│  - upload only new        │       (filename+size precheck)    │                         │
-└──────────────────────────┘                                   └────────────────────────┘
+┌────────────────────┐   WiFi/LAN HTTP   ┌─────────────────────┐   LAN HTTP    ┌──────────────────┐
+│ iOS Companion App  │ ────────────────▶ │ Master (LrWallPaper)│ ────────────▶ │ Agent (storage)  │
+│ (Swift, PhotoKit)  │  POST new asset + │ :5281               │  forward      │ :5282            │
+│ - PHAsset filter   │  metadata         │ - dedupe guard      │  multipart    │ POST /api/agent/ │
+│ - dedupe vs Master │ ◀──── GET ──────  │ - resolve target    │               │   ingest         │
+│ - upload only new  │  /file-exists     │   agent + PROXY     │ ◀── /sync ──  │ → archive to disk│
+└────────────────────┘  (name+size)      │ (no media on disk)  │   metadata    │   + push to /sync│
+                                          └─────────────────────┘               └──────────────────┘
 ```
 
 - The app talks **directly to Master over the LAN** (no Windows Agent, no USB).
 - Reuse the existing dedupe contract: `GET /api/master/file-exists?filename&size`
   before uploading (same one the Agent uses).
-- Master needs a **new binary-ingest endpoint** (the current `/api/master/sync`
-  only accepts metadata records for files the Agent already placed on disk).
-  The app uploads file bytes + metadata; Master writes to the archive dir and
-  records the catalog row. Mirror the archive layout the Agent uses:
-  `ArchiveDir/YYYY/YYYY-MM-DD/filename`.
+- Master needs a **binary-ingest endpoint** (`POST /api/master/ingest`) that acts as a
+  **streaming proxy** — Master stores no media on its own disk (it may not even run on the
+  media-archive machine). It dedupe-guards against the catalog, resolves the archive Agent
+  (`UltraSonic:MobileIngest:TargetAgentId`, else the sole registered Agent), and forwards the
+  multipart upload to that Agent's `POST /api/agent/ingest`. The Agent writes to its archive
+  (`ArchiveDir/YYYY/YYYY-MM-DD/filename`) and pushes metadata back through the existing
+  `/api/master/sync` path — so the iOS upload is indistinguishable from a device-sync record
+  and `agent_id` points at the agent that physically holds the file (required for the image proxy).
 
 ## Key technical decisions / requirements
 

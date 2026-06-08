@@ -1,9 +1,11 @@
 using System.Security.Cryptography;
+using System.Net.Http.Json;
 using System.Text;
 using Serilog;
 using Serilog.Events;
 using Serilog.Expressions;
 using ImageMagick;
+using LrWallPaper.Agent.Helpers;
 using LrWallPaper.Agent.Services;
 
 var logTemplate = "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz}[{Level:u3}][{SourceContext}]{Message:lj}{NewLine}{Exception}";
@@ -41,6 +43,15 @@ Log.Logger = new LoggerConfiguration()
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Large media uploads (iOS ingest proxied from Master): lift Kestrel's 30 MB default
+// body cap and the multipart form length limit, otherwise big videos/MOVs get a 413.
+builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = null);
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
+{
+    o.MultipartBodyLengthLimit = long.MaxValue;
+    o.ValueLengthLimit = int.MaxValue;
+});
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -57,6 +68,7 @@ builder.Services.Configure<HostOptions>(opts =>
 builder.Services.AddHostedService<ScanAndPushJob>();
 builder.Services.AddHostedService<DeviceSyncAppleJob>();
 builder.Services.AddHostedService<DeviceSyncGenericJob>();
+builder.Services.AddHostedService<ArchiveDeletionWatcher>();
 
 var app = builder.Build();
 
@@ -88,7 +100,7 @@ string PathCacheKey(string filePath)
 }
 
 // Image streaming endpoint
-app.MapGet("/api/agent/image", (string path, AgentState agentState) =>
+app.MapGet("/api/agent/image", (string path, bool? convert, AgentState agentState) =>
 {
     if (!agentState.IsRequestEnabled)
     {
@@ -117,7 +129,8 @@ app.MapGet("/api/agent/image", (string path, AgentState agentState) =>
     };
 
     var needsConvert = new HashSet<string> { ".heic", ".cr2", ".cr3", ".nef", ".nrw", ".arw", ".sr2", ".srf", ".dng", ".raf", ".pef", ".rw2", ".orf" };
-    if (needsConvert.Contains(ext))
+    // convert defaults to true; convert=false serves original bytes (iOS decodes HEIC natively).
+    if (needsConvert.Contains(ext) && (convert ?? true))
     {
         // Check cache
         var cacheKey = PathCacheKey(path);
@@ -307,6 +320,136 @@ app.MapPost("/api/agent/receive", async (HttpContext ctx, string path) =>
     catch (Exception ex)
     {
         return Results.Json(new { ok = false, error = ex.Message }, statusCode: 500);
+    }
+});
+
+// Binary ingest from the iOS companion app, proxied here by Master (the phone
+// only ever talks to Master; Master forwards the multipart upload to this agent,
+// the storage node). We archive to THIS agent's disk — same layout and dedupe as
+// DeviceSyncGenericJob — then push metadata via the normal /api/master/sync path,
+// so the iOS upload is indistinguishable from a device-sync record downstream and
+// the catalog's agent_id correctly points at the agent that physically holds the file.
+// Some library assets (AirDrop'd / third-party-app saves) keep filenames with
+// characters Windows forbids in paths (e.g. "image-2025-09-06-10:01:24-114.jpg" —
+// the colons make File.Move throw ERROR_INVALID_NAME). Map those to '_'.
+static string SanitizeWinFileName(string name)
+{
+    const string bad = "<>:\"/\\|?*";
+    var chars = name.ToCharArray();
+    for (int i = 0; i < chars.Length; i++)
+        if (chars[i] < 32 || bad.IndexOf(chars[i]) >= 0) chars[i] = '_';
+    var result = new string(chars).TrimEnd('.', ' ').Trim();
+    return string.IsNullOrEmpty(result) ? "file" : result;
+}
+
+app.MapPost("/api/agent/ingest", async (HttpContext ctx, AgentState agentState, IConfiguration config) =>
+{
+    if (!agentState.IsRequestEnabled) return Results.StatusCode(503);
+    if (!ctx.Request.HasFormContentType) return Results.BadRequest(new { error = "multipart/form-data required" });
+
+    var form = await ctx.Request.ReadFormAsync();
+    var file = form.Files["file"];
+    if (file is null || file.Length == 0) return Results.BadRequest(new { error = "file is required" });
+
+    var fileName = Path.GetFileName(
+        !string.IsNullOrWhiteSpace(form["fileName"]) ? form["fileName"].ToString() : file.FileName);
+    if (string.IsNullOrWhiteSpace(fileName)) return Results.BadRequest(new { error = "fileName is required" });
+    fileName = SanitizeWinFileName(fileName);
+
+    var archiveDir = config["DeviceSync:AppleImport:ArchiveDirectory"];
+    if (string.IsNullOrWhiteSpace(archiveDir)) archiveDir = config["DeviceSync:GenericImport:ArchiveDirectory"];
+    if (string.IsNullOrWhiteSpace(archiveDir))
+        return Results.Json(new { error = "DeviceSync:AppleImport:ArchiveDirectory is not configured" }, statusCode: 500);
+
+    var tempDir = config["DeviceSync:AppleImport:TempDirectory"];
+    if (string.IsNullOrWhiteSpace(tempDir)) tempDir = Path.GetTempPath();
+    Directory.CreateDirectory(tempDir);
+
+    var captureTime = DateTime.TryParse(form["captureTime"], out var parsed) ? parsed : DateTime.Now;
+    var size = file.Length;
+
+    // Stream the upload to a temp file (never fully in memory — safe for large video),
+    // hash it, then move into the dated archive folder with the same collision rule
+    // as the device-sync path (same-MD5 = skip, otherwise disambiguate the name).
+    var tmpFile = Path.Combine(tempDir, ".ingest_" + Guid.NewGuid().ToString("N") + Path.GetExtension(fileName));
+    try
+    {
+        await using (var fs = new FileStream(tmpFile, FileMode.Create, FileAccess.Write, FileShare.None))
+            await file.CopyToAsync(fs);
+
+        var md5 = MediaHelpers.ComputeMD5(tmpFile);
+
+        var targetDir = Path.Combine(archiveDir, captureTime.Year.ToString(), captureTime.ToString("yyyy-MM-dd"));
+        var targetFile = Path.Combine(targetDir, fileName);
+        if (File.Exists(targetFile))
+        {
+            if (MediaHelpers.ComputeMD5(targetFile) == md5)
+            {
+                File.Delete(tmpFile);
+                return Results.Ok(new { skipped = true, reason = "on-disk", fileName });
+            }
+            targetFile = Path.Combine(targetDir,
+                $"{Path.GetFileNameWithoutExtension(fileName)}_{DateTime.Now.Ticks}{Path.GetExtension(fileName)}");
+        }
+
+        Directory.CreateDirectory(targetDir);
+        File.Move(tmpFile, targetFile, overwrite: false);
+        var finalName = Path.GetFileName(targetFile);
+
+        var masterEndpoint = (config["Agent:MasterEndpoint"] ?? "http://localhost:5281").TrimEnd('/');
+        var agentId = config["Agent:AgentId"] ?? "local";
+        double? lat = double.TryParse(form["latitude"], out var la) ? la : null;
+        double? lon = double.TryParse(form["longitude"], out var lo) ? lo : null;
+        var cameraModel = form["cameraModel"].ToString();
+        var sourceType = string.IsNullOrWhiteSpace(form["sourceType"]) ? "userLibrary" : form["sourceType"].ToString();
+
+        using var client = new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromMinutes(2) };
+        var record = new
+        {
+            FileFullPath = targetFile,
+            FilePath = targetDir,
+            FileName = finalName,
+            CameraMaker = form["cameraMaker"].ToString(),
+            CameraModel = cameraModel,
+            LensModel = form["lensModel"].ToString(),
+            AgentId = agentId,
+            Latitude = lat,
+            Longitude = lon,
+            FileSize = size,
+            FileMD5 = md5,
+            CaptureTime = captureTime
+        };
+        await client.PostAsJsonAsync($"{masterEndpoint}/api/master/sync", new[] { record });
+
+        try
+        {
+            var hist = new
+            {
+                SourcePath = $"ios:{sourceType}",
+                TargetPath = targetFile,
+                FileName = finalName,
+                FileSize = size,
+                FileMD5 = md5,
+                TransferMode = "upload",
+                DeviceName = cameraModel,
+                AgentId = agentId,
+                AgentName = $"iOS Companion ({Environment.MachineName})",
+                CameraModel = cameraModel,
+                CaptureTime = captureTime,
+                ArchivedAt = DateTime.Now
+            };
+            await client.PostAsJsonAsync($"{masterEndpoint}/api/master/archive-history", new[] { hist });
+        }
+        catch (Exception ex) { Log.Warning(ex, "iOS ingest: archive-history push failed for {File}", finalName); }
+
+        Log.Information("iOS ingest archived {File} ({Size} bytes) -> {Target}", finalName, size, targetFile);
+        return Results.Ok(new { saved = true, path = targetFile, md5, fileName = finalName });
+    }
+    catch (Exception ex)
+    {
+        try { if (File.Exists(tmpFile)) File.Delete(tmpFile); } catch { /* best-effort */ }
+        Log.Error(ex, "iOS ingest failed for {File}", fileName);
+        return Results.Json(new { error = "ingest failed", detail = ex.Message }, statusCode: 500);
     }
 });
 

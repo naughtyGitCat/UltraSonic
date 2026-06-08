@@ -209,9 +209,13 @@ class Program
         // SPA fallback: any unmatched route returns index.html
         app.MapFallbackToFile("index.html");
 
-        app.MapGet("/api/image", async (string path, string? agentId, AgentManager agentManager, FileMD5Manager md5Manager) =>
+        app.MapGet("/api/image", async (string path, string? agentId, bool? convert, AgentManager agentManager, FileMD5Manager md5Manager) =>
         {
             if (string.IsNullOrEmpty(path)) return Results.NotFound();
+
+            // convert defaults to true (web UI). Clients that decode HEIC/RAW natively
+            // (e.g. the iOS app) pass convert=false to get original bytes — no Magick.
+            var doConvert = convert ?? true;
 
             var ext = System.IO.Path.GetExtension(path).ToLowerInvariant();
             var contentType = ext switch {
@@ -234,7 +238,7 @@ class Program
             if (string.IsNullOrEmpty(agentId) || agentId == "local")
             {
                 if (!System.IO.File.Exists(path)) return Results.NotFound();
-                if (needsConvert.Contains(ext))
+                if (needsConvert.Contains(ext) && doConvert)
                 {
                     // Try cache: lookup file_md5 from DB
                     var entity = await md5Manager.FindByFullPathAsync(path);
@@ -270,11 +274,13 @@ class Program
 
             var client = new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromMinutes(5) };
             try {
-                var request = new HttpRequestMessage(HttpMethod.Get, $"{agent.Endpoint.TrimEnd('/')}/api/agent/image?path={Uri.EscapeDataString(path)}");
+                var agentUrl = $"{agent.Endpoint.TrimEnd('/')}/api/agent/image?path={Uri.EscapeDataString(path)}";
+                if (!doConvert) agentUrl += "&convert=false";
+                var request = new HttpRequestMessage(HttpMethod.Get, agentUrl);
                 var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
                 response.EnsureSuccessStatusCode();
                 var stream = await response.Content.ReadAsStreamAsync();
-                var proxyContentType = needsConvert.Contains(ext) ? "image/jpeg" : contentType;
+                var proxyContentType = (needsConvert.Contains(ext) && doConvert) ? "image/jpeg" : contentType;
                 return Results.File(stream, proxyContentType, enableRangeProcessing: true);
             } catch {
                 return Results.StatusCode(502);
