@@ -442,6 +442,23 @@ namespace LrWallPaper.Services
             await db.ExecuteAsync("DELETE FROM file_info WHERE id = @0", id);
         }
 
+        // Re-point a catalog row to a new node + path after a verified cross-node
+        // transfer. Matches by old fullpath (UNIQUE). Returns rows affected
+        // (0 if the moved file wasn't catalogued — that's fine).
+        public async Task<int> RepointFileAsync(string oldFullPath, string newFullPath, string newAgentId)
+        {
+            using var conn = new SqliteConnection(_connectionString);
+            conn.Open();
+            var cmd = conn.CreateCommand();
+            cmd.CommandText = "UPDATE file_info SET agent_id=@aid, fullpath=@nf, filepath=@np, update_time=@ut WHERE fullpath=@of";
+            cmd.Parameters.Add(new SqliteParameter("@aid", newAgentId));
+            cmd.Parameters.Add(new SqliteParameter("@nf", newFullPath));
+            cmd.Parameters.Add(new SqliteParameter("@np", Path.GetDirectoryName(newFullPath) ?? ""));
+            cmd.Parameters.Add(new SqliteParameter("@ut", $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}"));
+            cmd.Parameters.Add(new SqliteParameter("@of", oldFullPath));
+            return await cmd.ExecuteNonQueryAsync();
+        }
+
         public async Task RenameFileAsync(long id, string newFilePath, string newFileName)
         {
             using var conn = new SqliteConnection(_connectionString);

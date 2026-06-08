@@ -274,6 +274,42 @@ app.MapPost("/api/agent/move", async (HttpContext ctx) =>
     return Results.Ok();
 });
 
+// Receive a file streamed from Master (agent-to-agent transfer landing point).
+// Writes to a path resolved in THIS process's session — for the Z690 agent that
+// runs as the interactive user, J:\ etc. map to the user's real volumes (not the
+// SMB/SYSTEM-session view), which is exactly why transfer goes through the agent.
+// Streams body -> disk while hashing, so multi-GB files don't buffer in memory.
+app.MapPost("/api/agent/receive", async (HttpContext ctx, string path) =>
+{
+    if (string.IsNullOrEmpty(path)) return Results.BadRequest("path required");
+    try
+    {
+        var dir = System.IO.Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(dir)) System.IO.Directory.CreateDirectory(dir);
+
+        // Write to a temp sibling first, then atomically move into place.
+        var tmp = path + ".part";
+        long size;
+        string md5Hex;
+        using (var md5 = System.Security.Cryptography.MD5.Create())
+        using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 20))
+        using (var crypto = new System.Security.Cryptography.CryptoStream(fs, md5, System.Security.Cryptography.CryptoStreamMode.Write))
+        {
+            await ctx.Request.Body.CopyToAsync(crypto);
+            crypto.FlushFinalBlock();
+            size = fs.Length;
+            md5Hex = Convert.ToHexString(md5.Hash!).ToLowerInvariant();
+        }
+        if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
+        System.IO.File.Move(tmp, path);
+        return Results.Ok(new { ok = true, md5 = md5Hex, size, path });
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { ok = false, error = ex.Message }, statusCode: 500);
+    }
+});
+
 // Config read/write endpoints
 app.MapGet("/api/agent/config", () =>
 {
