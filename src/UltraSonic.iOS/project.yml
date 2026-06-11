@@ -25,3 +25,5 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Sources/Support/Info.plist
         TARGETED_DEVICE_FAMILY: "1,2"
+        # App icon lives in Sources/Assets.xcassets (single 1024px, Xcode 14+ style).
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
