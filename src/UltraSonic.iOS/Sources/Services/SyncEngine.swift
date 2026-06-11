@@ -214,7 +214,11 @@ final class SyncEngine: ObservableObject {
     /// deliberately do NOT whitelist DJI_/DSC here. EXIF Make=="Apple" confirms after
     /// download (catches e.g. a Canon photo that's also named IMG_).
     static func isDeviceCapture(_ filename: String) -> Bool {
-        filename.uppercased().hasPrefix("IMG_")
+        let u = filename.uppercased()
+        // iOS screenshots are IMG_####.PNG — the camera never produces PNG, and they
+        // carry no EXIF Make to fail the post-download check. Skip them outright,
+        // matching the AFC path's screenshot filter.
+        return u.hasPrefix("IMG_") && !u.hasSuffix(".PNG")
     }
 
     private func advance(_ mark: inout Date?, _ date: Date?) {
