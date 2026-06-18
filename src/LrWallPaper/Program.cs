@@ -64,8 +64,10 @@ class Program
         builder.Services.AddHostedService<MasterReplicationJob>();
         builder.Services.AddHostedService<FileRenameJob>();
         builder.Services.AddHostedService<CloudBackupJob>();
+#if WINDOWS
         builder.Services.AddSingleton<MasterTrayIconManager>();
-        
+#endif
+
         builder.Services.AddControllers();
         // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
         builder.Services.AddEndpointsApiExplorer();
@@ -86,9 +88,11 @@ class Program
             app.UseSwagger();
             app.UseSwaggerUI();
         }
+#if WINDOWS
         var trayManager = app.Services.GetRequiredService<MasterTrayIconManager>();
         trayManager.Start();
         app.Lifetime.ApplicationStopping.Register(() => trayManager.Stop());
+#endif
 
 // app.UseHttpsRedirection();
 
