@@ -57,7 +57,9 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddSerilog();
 builder.Services.AddSingleton<AgentState>();
+#if WINDOWS
 builder.Services.AddSingleton<TrayIconManager>();
+#endif
 builder.Services.Configure<HostOptions>(opts =>
 {
     opts.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
@@ -66,15 +68,19 @@ builder.Services.Configure<HostOptions>(opts =>
     opts.ShutdownTimeout = TimeSpan.FromMinutes(10);
 });
 builder.Services.AddHostedService<ScanAndPushJob>();
-builder.Services.AddHostedService<DeviceSyncAppleJob>();
+#if WINDOWS
+builder.Services.AddHostedService<DeviceSyncAppleJob>(); // iOS USB (AFC) — Windows only
+#endif
 builder.Services.AddHostedService<DeviceSyncGenericJob>();
 builder.Services.AddHostedService<ArchiveDeletionWatcher>();
 
 var app = builder.Build();
 
+#if WINDOWS
 var trayManager = app.Services.GetRequiredService<TrayIconManager>();
 trayManager.Start();
 app.Lifetime.ApplicationStopping.Register(() => trayManager.Stop());
+#endif
 
 if (app.Environment.IsDevelopment())
 {
