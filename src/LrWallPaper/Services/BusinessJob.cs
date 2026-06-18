@@ -3,13 +3,8 @@ using LrWallPaper.Helpers;
 
 namespace LrWallPaper.Services;
 
-public record HistoryCapture
-{
-    public string? FileBaseName { get; set; }
-    public string? FileExtension { get; set; }    
-    public EXIFDigest? ExifDigest { get; set; }
-    public string? AbsolutePath { get; set; }
-}
+// HistoryCapture moved to HistoryCapture.cs so the headless/Linux build (which
+// excludes this Windows-only wallpaper job) still has the type.
 public class BusinessJob : BackgroundService
 {
     private readonly ILogger<BusinessJob> _logger;
