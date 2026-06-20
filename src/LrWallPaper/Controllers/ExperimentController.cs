@@ -1,3 +1,5 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using LrWallPaper.Services;
 using Microsoft.AspNetCore.Mvc;
 namespace LrWallPaper.Controllers;
@@ -16,22 +18,35 @@ public class ExperimentController : ControllerBase
         _agentManager = agentManager;
     }
 
+    /// Owner scope for read queries:
+    ///   - auth off / anonymous  -> null  (no filtering; LAN/homelab sees everything)
+    ///   - admin                 -> null  (admins see every user's media)
+    ///   - regular user          -> their user id (sees only their own media)
+    private long? OwnerFilter()
+    {
+        if (User?.Identity?.IsAuthenticated != true) return null;
+        if (User.IsInRole("admin")) return null;
+        var uid = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                  ?? User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        return long.TryParse(uid, out var id) ? id : null;
+    }
+
     [HttpGet("{days:int}")]
     public async Task<object> Get(int days)
     {
-        return await _md5Manager.GetRecentCapturesAsync(new TimeSpan(days, 0, 0, 0));
+        return await _md5Manager.GetRecentCapturesAsync(new TimeSpan(days, 0, 0, 0), OwnerFilter());
     }
 
     [HttpGet("page")]
     public async Task<object> GetPaged([FromQuery] int page = 1, [FromQuery] int pageSize = 30)
     {
-        return await _md5Manager.GetPagedCapturesAsync(page, pageSize);
+        return await _md5Manager.GetPagedCapturesAsync(page, pageSize, OwnerFilter());
     }
 
     [HttpGet("filters")]
     public async Task<object> GetFilters()
     {
-        return await _md5Manager.GetFilterOptionsAsync();
+        return await _md5Manager.GetFilterOptionsAsync(OwnerFilter());
     }
 
     [HttpGet("gallery")]
@@ -44,13 +59,13 @@ public class ExperimentController : ControllerBase
         [FromQuery] long? tagId = null)
     {
         return await _md5Manager.GetFilteredPagedCapturesAsync(
-            page, pageSize, cameraMaker, cameraModel, fileType, agentId, dateFrom, dateTo, hasGps, mediaType, tagId);
+            page, pageSize, cameraMaker, cameraModel, fileType, agentId, dateFrom, dateTo, hasGps, mediaType, tagId, OwnerFilter());
     }
 
     [HttpGet("detail/{id:long}")]
     public async Task<IActionResult> GetDetail(long id)
     {
-        var capture = await _md5Manager.GetCaptureByIdAsync(id);
+        var capture = await _md5Manager.GetCaptureByIdAsync(id, OwnerFilter());
         if (capture == null) return NotFound();
         return Ok(capture);
     }
@@ -62,7 +77,8 @@ public class ExperimentController : ControllerBase
     [HttpGet("live-photo/{id:long}")]
     public async Task<IActionResult> GetLivePhotoMov(long id)
     {
-        var capture = await _md5Manager.GetCaptureByIdAsync(id);
+        var owner = OwnerFilter();
+        var capture = await _md5Manager.GetCaptureByIdAsync(id, owner);
         if (capture == null) return NotFound();
 
         var ext = Path.GetExtension(capture.FileName).ToLowerInvariant();
@@ -71,7 +87,7 @@ public class ExperimentController : ControllerBase
         // Look for same-name .MOV in same directory
         var baseName = Path.GetFileNameWithoutExtension(capture.FileName);
         var movName = baseName + ".MOV";
-        var candidates = await _md5Manager.GetFilesByFolderAsync(capture.FilePath, capture.AgentId);
+        var candidates = await _md5Manager.GetFilesByFolderAsync(capture.FilePath, capture.AgentId, owner);
         var mov = candidates.FirstOrDefault(f =>
             f.FileName.Equals(movName, StringComparison.OrdinalIgnoreCase) &&
             f.FileName != capture.FileName);
@@ -83,7 +99,8 @@ public class ExperimentController : ControllerBase
     [HttpDelete("{id:long}")]
     public async Task<IActionResult> Delete(long id)
     {
-        var capture = await _md5Manager.GetCaptureByIdAsync(id);
+        // Owner-scoped: a regular user can only delete their own media (admins/anon: any).
+        var capture = await _md5Manager.GetCaptureByIdAsync(id, OwnerFilter());
         if (capture == null) return NotFound();
         await DeletePhysicalFile(capture);
         DeleteCache(capture.FileMD5);
@@ -120,13 +137,13 @@ public class ExperimentController : ControllerBase
     [HttpGet("folders")]
     public async Task<object> GetFolders([FromQuery] string? agentId = null)
     {
-        return await _md5Manager.GetFoldersAsync(agentId);
+        return await _md5Manager.GetFoldersAsync(agentId, OwnerFilter());
     }
 
     [HttpGet("folder-files")]
     public async Task<object> GetFolderFiles([FromQuery] string path, [FromQuery] string? agentId = null)
     {
-        return await _md5Manager.GetFilesByFolderAsync(path, agentId);
+        return await _md5Manager.GetFilesByFolderAsync(path, agentId, OwnerFilter());
     }
 
     [HttpPost("move")]

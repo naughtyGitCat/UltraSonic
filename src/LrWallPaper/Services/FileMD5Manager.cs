@@ -34,6 +34,9 @@ namespace LrWallPaper.Services
         [Column("longitude")]
         public double? Longitude { get; set; }
 
+        [Column("owner_user_id")]
+        public long? OwnerUserId { get; set; }
+
         [Column("file_size")]
         public long FileSize { get; set; }
 
@@ -121,6 +124,10 @@ namespace LrWallPaper.Services
             try { db.Execute("UPDATE file_info SET agent_id = 'local' WHERE agent_id IS NULL;"); } catch {}
             try { db.Execute("ALTER TABLE file_info ADD COLUMN latitude REAL NULL;"); } catch {}
             try { db.Execute("ALTER TABLE file_info ADD COLUMN longitude REAL NULL;"); } catch {}
+            // Multi-tenancy (Phase 2b): which user owns this file. NULL = legacy/shared
+            // (pre-auth or Auth:Enabled=false). Read queries filter by it when auth is on.
+            try { db.Execute("ALTER TABLE file_info ADD COLUMN owner_user_id INTEGER NULL;"); } catch {}
+            try { db.Execute("CREATE INDEX IF NOT EXISTS idx_file_owner ON file_info(owner_user_id);"); } catch {}
 
             // Face recognition tables
             db.Execute("""
@@ -222,7 +229,7 @@ namespace LrWallPaper.Services
             var pSQL = """
                                INSERT OR REPLACE INTO
                                 file_info
-                                (fullpath,filepath,filename,camera_maker,camera_model,lens_model,agent_id,latitude,longitude,file_size,file_md5,capture_time,create_time,update_time)
+                                (fullpath,filepath,filename,camera_maker,camera_model,lens_model,agent_id,latitude,longitude,owner_user_id,file_size,file_md5,capture_time,create_time,update_time)
                                 VALUES
                                 (
                                     @fullpath,
@@ -234,6 +241,7 @@ namespace LrWallPaper.Services
                                     @agent_id,
                                     @latitude,
                                     @longitude,
+                                    @owner_user_id,
                                     @file_size,
                                     @file_md5,
                                     @capture_time,
@@ -261,6 +269,7 @@ namespace LrWallPaper.Services
             cmd.Parameters.Add(new SqliteParameter("@agent_id", file.AgentId ?? "local"));
             cmd.Parameters.Add(new SqliteParameter("@latitude", file.Latitude.HasValue ? file.Latitude.Value : DBNull.Value));
             cmd.Parameters.Add(new SqliteParameter("@longitude", file.Longitude.HasValue ? file.Longitude.Value : DBNull.Value));
+            cmd.Parameters.Add(new SqliteParameter("@owner_user_id", file.OwnerUserId.HasValue ? file.OwnerUserId.Value : DBNull.Value));
             cmd.Parameters.Add(new SqliteParameter("@file_size", file.FileSize==0?(object)0:file.FileSize));
             cmd.Parameters.Add(new SqliteParameter("@file_md5", file.FileMD5));
             cmd.Parameters.Add(new SqliteParameter("@capture_time", $"{file.CaptureTime:yyyy-MM-dd HH:mm:ss}"));
@@ -349,9 +358,14 @@ namespace LrWallPaper.Services
             await db.ExecuteAsync(sql);
         }
 
-        public async Task<List<FileMD5Entity>> GetPagedCapturesAsync(int page, int pageSize)
+        public async Task<List<FileMD5Entity>> GetPagedCapturesAsync(int page, int pageSize, long? ownerFilter = null)
         {
             using var db = OpenDb();
+            if (ownerFilter is { } owner)
+            {
+                var ownedSql = "SELECT * FROM file_info WHERE owner_user_id = @0 ORDER BY capture_time DESC LIMIT @1 OFFSET @2";
+                return await db.FetchAsync<FileMD5Entity>(ownedSql, owner, pageSize, (page - 1) * pageSize);
+            }
             var sql = "SELECT * FROM file_info ORDER BY capture_time DESC LIMIT @0 OFFSET @1";
             return await db.FetchAsync<FileMD5Entity>(sql, pageSize, (page - 1) * pageSize);
         }
@@ -438,23 +452,31 @@ namespace LrWallPaper.Services
             return await db.ExecuteAsync("DELETE FROM deleted_files");
         }
 
-        public async Task<List<FileMD5Entity>> GetRecentCapturesAsync(TimeSpan offset)
+        public async Task<List<FileMD5Entity>> GetRecentCapturesAsync(TimeSpan offset, long? ownerFilter = null)
         {
             using var db = OpenDb();
             var since = DateTime.Now - offset;
+            if (ownerFilter is { } owner)
+            {
+                var ownedSql = "SELECT * FROM file_info WHERE capture_time >= @0 AND owner_user_id = @1 ORDER BY capture_time DESC";
+                return await db.FetchAsync<FileMD5Entity>(ownedSql, since.ToString("yyyy-MM-dd HH:mm:ss"), owner);
+            }
             var sql = "SELECT * FROM file_info WHERE capture_time >= @0 ORDER BY capture_time DESC";
             return await db.FetchAsync<FileMD5Entity>(sql, since.ToString("yyyy-MM-dd HH:mm:ss"));
         }
 
-        public async Task<object> GetFilterOptionsAsync()
+        public async Task<object> GetFilterOptionsAsync(long? ownerFilter = null)
         {
             using var db = OpenDb();
-            var makers = await db.FetchAsync<string>("SELECT DISTINCT camera_maker FROM file_info WHERE camera_maker != '' ORDER BY camera_maker");
-            var models = await db.FetchAsync<string>("SELECT DISTINCT camera_model FROM file_info WHERE camera_model != '' ORDER BY camera_model");
-            var agents = await db.FetchAsync<string>("SELECT DISTINCT agent_id FROM file_info ORDER BY agent_id");
+            // When owner-scoped, every DISTINCT is constrained to the caller's files.
+            var ownerWhere = ownerFilter is { } o ? $" AND owner_user_id = {o}" : "";
+            var ownerWhereOnly = ownerFilter is { } o2 ? $" WHERE owner_user_id = {o2}" : "";
+            var makers = await db.FetchAsync<string>($"SELECT DISTINCT camera_maker FROM file_info WHERE camera_maker != ''{ownerWhere} ORDER BY camera_maker");
+            var models = await db.FetchAsync<string>($"SELECT DISTINCT camera_model FROM file_info WHERE camera_model != ''{ownerWhere} ORDER BY camera_model");
+            var agents = await db.FetchAsync<string>($"SELECT DISTINCT agent_id FROM file_info{ownerWhereOnly} ORDER BY agent_id");
             // Use REPLACE to strip everything before the last dot: e.g. "IMG(2).HEIC" -> ".heic"
             var types = await db.FetchAsync<string>(
-                "SELECT DISTINCT LOWER(SUBSTR(filename, LENGTH(RTRIM(filename, REPLACE(filename, '.', ''))))) AS ext FROM file_info WHERE INSTR(filename, '.') > 0 ORDER BY ext");
+                $"SELECT DISTINCT LOWER(SUBSTR(filename, LENGTH(RTRIM(filename, REPLACE(filename, '.', ''))))) AS ext FROM file_info WHERE INSTR(filename, '.') > 0{ownerWhere} ORDER BY ext");
             return new { cameraMakers = makers, cameraModels = models, fileTypes = types, agentIds = agents };
         }
 
@@ -467,13 +489,14 @@ namespace LrWallPaper.Services
             string? fileType, string? agentId,
             DateTime? dateFrom, DateTime? dateTo,
             bool? hasGps, string? mediaType = null,
-            long? tagId = null)
+            long? tagId = null, long? ownerFilter = null)
         {
             using var db = OpenDb();
             var conditions = new List<string>();
             var parameters = new List<object>();
             var idx = 0;
 
+            if (ownerFilter is { } owner) { conditions.Add($"owner_user_id = @{idx}"); parameters.Add(owner); idx++; }
             if (!string.IsNullOrEmpty(cameraMaker)) { conditions.Add($"camera_maker = @{idx}"); parameters.Add(cameraMaker); idx++; }
             if (!string.IsNullOrEmpty(cameraModel)) { conditions.Add($"camera_model = @{idx}"); parameters.Add(cameraModel); idx++; }
             if (!string.IsNullOrEmpty(fileType)) { conditions.Add($"LOWER(filename) LIKE @{idx}"); parameters.Add($"%{fileType.ToLower()}"); idx++; }
@@ -504,9 +527,11 @@ namespace LrWallPaper.Services
             return await db.FetchAsync<FileMD5Entity>(sql, parameters.ToArray());
         }
 
-        public async Task<FileMD5Entity?> GetCaptureByIdAsync(long id)
+        public async Task<FileMD5Entity?> GetCaptureByIdAsync(long id, long? ownerFilter = null)
         {
             using var db = OpenDb();
+            if (ownerFilter is { } owner)
+                return (await db.FetchAsync<FileMD5Entity>("SELECT * FROM file_info WHERE id = @0 AND owner_user_id = @1", id, owner)).FirstOrDefault();
             return (await db.FetchAsync<FileMD5Entity>("SELECT * FROM file_info WHERE id = @0", id)).FirstOrDefault();
         }
 
@@ -567,22 +592,27 @@ namespace LrWallPaper.Services
             return await db.ExecuteAsync("DELETE FROM file_info WHERE agent_id = @0", agentId);
         }
 
-        public async Task<List<FolderSummary>> GetFoldersAsync(string? agentId)
+        public async Task<List<FolderSummary>> GetFoldersAsync(string? agentId, long? ownerFilter = null)
         {
             using var db = OpenDb();
-            var where = !string.IsNullOrEmpty(agentId) ? "WHERE agent_id = @0" : "";
+            var conditions = new List<string>();
+            var parameters = new List<object>();
+            if (!string.IsNullOrEmpty(agentId)) { conditions.Add($"agent_id = @{parameters.Count}"); parameters.Add(agentId); }
+            if (ownerFilter is { } owner) { conditions.Add($"owner_user_id = @{parameters.Count}"); parameters.Add(owner); }
+            var where = conditions.Count > 0 ? "WHERE " + string.Join(" AND ", conditions) : "";
             var sql = $"SELECT filepath, agent_id as agentId, COUNT(*) as fileCount, SUM(file_size) as totalSize FROM file_info {where} GROUP BY filepath, agent_id ORDER BY filepath";
-            return !string.IsNullOrEmpty(agentId)
-                ? await db.FetchAsync<FolderSummary>(sql, agentId)
-                : await db.FetchAsync<FolderSummary>(sql);
+            return await db.FetchAsync<FolderSummary>(sql, parameters.ToArray());
         }
 
-        public async Task<List<FileMD5Entity>> GetFilesByFolderAsync(string path, string? agentId)
+        public async Task<List<FileMD5Entity>> GetFilesByFolderAsync(string path, string? agentId, long? ownerFilter = null)
         {
             using var db = OpenDb();
-            if (!string.IsNullOrEmpty(agentId))
-                return await db.FetchAsync<FileMD5Entity>("SELECT * FROM file_info WHERE filepath = @0 AND agent_id = @1 ORDER BY filename", path, agentId);
-            return await db.FetchAsync<FileMD5Entity>("SELECT * FROM file_info WHERE filepath = @0 ORDER BY filename", path);
+            var conditions = new List<string> { $"filepath = @0" };
+            var parameters = new List<object> { path };
+            if (!string.IsNullOrEmpty(agentId)) { conditions.Add($"agent_id = @{parameters.Count}"); parameters.Add(agentId); }
+            if (ownerFilter is { } owner) { conditions.Add($"owner_user_id = @{parameters.Count}"); parameters.Add(owner); }
+            var sql = $"SELECT * FROM file_info WHERE {string.Join(" AND ", conditions)} ORDER BY filename";
+            return await db.FetchAsync<FileMD5Entity>(sql, parameters.ToArray());
         }
 
         public async Task<List<FileMD5Entity>> GetFilesByIdsAsync(List<long> ids)
