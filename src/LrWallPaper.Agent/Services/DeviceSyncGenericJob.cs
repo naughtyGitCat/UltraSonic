@@ -19,6 +19,7 @@ public class DeviceSyncGenericJob : BackgroundService
         _logger = logger;
         _configuration = configuration;
         _state = state;
+        _httpClient.ApplyServiceKey(_configuration);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

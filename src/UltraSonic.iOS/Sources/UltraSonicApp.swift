@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct UltraSonicApp: App {
     @StateObject private var engine = SyncEngine()
+    @StateObject private var auth = AuthState()
 
     init() {
         // Reclaim scratch files leaked by a previous crash/jetsam (the storage-bloat fix).
@@ -13,9 +14,20 @@ struct UltraSonicApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(engine)
-                .onAppear { BackgroundSync.schedule() }
+            Group {
+                switch auth.status {
+                case .unknown:
+                    ProgressView("Connecting…")
+                case .needsLogin:
+                    LoginView()
+                case .open, .signedIn:
+                    ContentView()
+                        .onAppear { BackgroundSync.schedule() }
+                }
+            }
+            .environmentObject(engine)
+            .environmentObject(auth)
+            .task { await auth.bootstrap() }
         }
     }
 }

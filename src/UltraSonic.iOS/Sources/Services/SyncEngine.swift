@@ -182,6 +182,13 @@ final class SyncEngine: ObservableObject {
                     // A Stop request cancels the in-flight upload — don't count it as a
                     // failure; just break so it's retried next run.
                     if Task.isCancelled { break outer }
+                    // Token expired/invalid mid-sync — stop and let the app re-prompt login.
+                    if case MasterClientError.unauthorized = error {
+                        status = "Session expired — please sign in again"
+                        append("🔒 Session expired")
+                        NotificationCenter.default.post(name: .ultrasonicSessionExpired, object: nil)
+                        break outer
+                    }
                     failed += 1
                     assetOK = false
                     append("❌ \(media.originalFilename): \(error.localizedDescription)")

@@ -412,6 +412,7 @@ app.MapPost("/api/agent/ingest", async (HttpContext ctx, AgentState agentState, 
         long? ownerUserId = long.TryParse(form["ownerUserId"], out var ow) ? ow : null;
 
         using var client = new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromMinutes(2) };
+        client.ApplyServiceKey(config);
         var record = new
         {
             FileFullPath = targetFile,

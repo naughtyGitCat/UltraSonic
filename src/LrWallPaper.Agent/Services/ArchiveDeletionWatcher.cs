@@ -31,6 +31,7 @@ public class ArchiveDeletionWatcher : BackgroundService
     {
         _logger = logger;
         _config = config;
+        _http.ApplyServiceKey(_config);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
