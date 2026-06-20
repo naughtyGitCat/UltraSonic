@@ -28,6 +28,7 @@ public class ScanAndPushJob : BackgroundService
         _logger = logger;
         _configuration = configuration;
         _agentState = agentState;
+        _httpClient.ApplyServiceKey(_configuration);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

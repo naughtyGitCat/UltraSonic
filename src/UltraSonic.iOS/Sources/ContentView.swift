@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var engine: SyncEngine
+    @EnvironmentObject var auth: AuthState
     @State private var endpoint = AppSettings.shared.masterEndpoint
 
     enum Health { case unknown, checking, healthy, down }
@@ -110,6 +111,20 @@ struct ContentView: View {
                     } else {
                         ForEach(engine.log, id: \.self) { line in
                             Text(line).font(.system(.caption, design: .monospaced))
+                        }
+                    }
+                }
+
+                if auth.status == .signedIn {
+                    Section("Account") {
+                        if let email = auth.email {
+                            LabeledContent("Signed in", value: email)
+                                .font(.footnote)
+                        }
+                        Button(role: .destructive) {
+                            auth.logout()
+                        } label: {
+                            Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right")
                         }
                     }
                 }

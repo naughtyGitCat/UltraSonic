@@ -13,11 +13,16 @@ public class AuthService
 {
     public bool Enabled { get; }
     public SymmetricSecurityKey SigningKey { get; }
+    /// Shared secret for Agent→Master service calls (sync/tombstone/etc). When set and
+    /// auth is enabled, a request carrying it in X-Service-Key is treated as a trusted
+    /// "service" principal. Empty = service calls are not separately authenticated.
+    public string? ServiceApiKey { get; }
     private readonly byte[] _secret;
 
     public AuthService(IConfiguration cfg)
     {
         Enabled = cfg.GetValue("Auth:Enabled", false);
+        ServiceApiKey = cfg["Auth:ServiceApiKey"];
 
         var secret = cfg["Auth:JwtSecret"];
         if (string.IsNullOrWhiteSpace(secret))

@@ -16,6 +16,14 @@ struct IngestMetadata {
 enum MasterClientError: Error {
     case badURL
     case badResponse(Int)
+    case unauthorized
+}
+
+/// The signed-in account, as returned by /api/auth/{login,register,me}.
+struct AuthUser: Decodable {
+    let id: Int
+    let email: String
+    let role: String
 }
 
 /// Talks directly to the Master node over the LAN (no Windows Agent, no USB).
@@ -34,13 +42,30 @@ final class MasterClient {
         return f
     }()
 
-    init(baseURL: String) {
+    /// Bearer token for Authorization headers. Defaults to the stored token so every
+    /// ad-hoc MasterClient() picks up the current session without threading it through.
+    private let token: String?
+
+    init(baseURL: String, token: String? = TokenStore.shared.token) {
         self.baseURL = baseURL.hasSuffix("/") ? String(baseURL.dropLast()) : baseURL
+        self.token = token
         let cfg = URLSessionConfiguration.default
         cfg.timeoutIntervalForRequest = 60
         cfg.timeoutIntervalForResource = 60 * 60 // large videos over WiFi
         cfg.waitsForConnectivity = true
         self.session = URLSession(configuration: cfg)
+    }
+
+    /// Attach the bearer token (no-op when signed out / auth disabled).
+    private func authorize(_ req: inout URLRequest) {
+        if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+    }
+
+    /// GET helper that carries the Authorization header.
+    private func authedData(from url: URL) async throws -> (Data, URLResponse) {
+        var req = URLRequest(url: url)
+        authorize(&req)
+        return try await session.data(for: req)
     }
 
     /// Liveness check against GET /api/health. Uses a short-timeout, fail-fast session
@@ -76,7 +101,7 @@ final class MasterClient {
         ]
         guard let url = comps.url else { return [] }
         do {
-            let (data, resp) = try await session.data(from: url)
+            let (data, resp) = try await authedData(from: url)
             guard (resp as? HTTPURLResponse)?.statusCode == 200 else { return [] }
             return (try? JSONDecoder().decode([MediaItem].self, from: data)) ?? []
         } catch {
@@ -87,13 +112,16 @@ final class MasterClient {
     /// URL to fetch an item's bytes through Master. `convert=false` makes Master/Agent
     /// skip the HEIC/RAW→JPEG step and return the original — iOS decodes HEIC natively,
     /// so we save the server-side conversion and serve the full-quality original.
+    /// AsyncImage can't send an Authorization header, so the token rides as a query param.
     func imageURL(for item: MediaItem) -> URL? {
         guard var comps = URLComponents(string: "\(baseURL)/api/image") else { return nil }
-        comps.queryItems = [
+        var items = [
             URLQueryItem(name: "path", value: item.fileFullPath),
             URLQueryItem(name: "agentId", value: item.agentId ?? "local"),
             URLQueryItem(name: "convert", value: "false")
         ]
+        if let token { items.append(URLQueryItem(name: "access_token", value: token)) }
+        comps.queryItems = items
         return comps.url
     }
 
@@ -107,7 +135,7 @@ final class MasterClient {
         guard let url = comps.url else { return [] }
         struct Wrap: Decodable { let items: [Tombstone] }
         do {
-            let (data, resp) = try await session.data(from: url)
+            let (data, resp) = try await authedData(from: url)
             guard (resp as? HTTPURLResponse)?.statusCode == 200 else { return [] }
             return (try? JSONDecoder().decode(Wrap.self, from: data))?.items ?? []
         } catch {
@@ -129,6 +157,7 @@ final class MasterClient {
         guard let url = URL(string: urlString) else { return false }
         var req = URLRequest(url: url)
         req.httpMethod = "DELETE"
+        authorize(&req)
         do {
             let (_, resp) = try await session.data(for: req)
             return (200...299).contains((resp as? HTTPURLResponse)?.statusCode ?? 0)
@@ -146,7 +175,7 @@ final class MasterClient {
         ]
         guard let url = comps.url else { return false }
         do {
-            let (data, resp) = try await session.data(from: url)
+            let (data, resp) = try await authedData(from: url)
             guard (resp as? HTTPURLResponse)?.statusCode == 200 else { return false }
             return (try? JSONDecoder().decode([String: Bool].self, from: data))?["exists"] ?? false
         } catch {
@@ -165,6 +194,7 @@ final class MasterClient {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        authorize(&req)
 
         // Build the small fields prefix + the file-part header and the closing footer.
         var prefix = Data()
@@ -212,6 +242,62 @@ final class MasterClient {
         }
 
         guard let http = resp as? HTTPURLResponse else { throw MasterClientError.badResponse(-1) }
+        if http.statusCode == 401 { throw MasterClientError.unauthorized }
         guard (200...299).contains(http.statusCode) else { throw MasterClientError.badResponse(http.statusCode) }
+    }
+
+    // MARK: - Auth
+
+    private struct AuthResponse: Decodable { let token: String; let user: AuthUser }
+
+    /// True if the Master requires authentication (Auth:Enabled). Read off /api/health.
+    /// Falls back to false (open) when unreachable so we don't gate a homelab behind login.
+    func authRequired() async -> Bool {
+        guard let url = URL(string: "\(baseURL)/api/health") else { return false }
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.timeoutIntervalForRequest = 5
+        let probe = URLSession(configuration: cfg)
+        struct Health: Decodable { let authEnabled: Bool? }
+        do {
+            let (data, _) = try await probe.data(from: url)
+            return (try? JSONDecoder().decode(Health.self, from: data))?.authEnabled ?? false
+        } catch {
+            return false
+        }
+    }
+
+    func login(email: String, password: String) async throws -> AuthUser {
+        try await credentials(path: "login", email: email, password: password)
+    }
+
+    func register(email: String, password: String) async throws -> AuthUser {
+        try await credentials(path: "register", email: email, password: password)
+    }
+
+    private func credentials(path: String, email: String, password: String) async throws -> AuthUser {
+        guard let url = URL(string: "\(baseURL)/api/auth/\(path)") else { throw MasterClientError.badURL }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONEncoder().encode(["email": email, "password": password])
+        let (data, resp) = try await session.data(for: req)
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+        if code == 401 { throw MasterClientError.unauthorized }
+        guard (200...299).contains(code) else { throw MasterClientError.badResponse(code) }
+        let decoded = try JSONDecoder().decode(AuthResponse.self, from: data)
+        TokenStore.shared.save(token: decoded.token, email: decoded.user.email)
+        return decoded.user
+    }
+
+    /// Validate the stored token; returns the user or nil if it's missing/expired.
+    func me() async -> AuthUser? {
+        guard token != nil, let url = URL(string: "\(baseURL)/api/auth/me") else { return nil }
+        do {
+            let (data, resp) = try await authedData(from: url)
+            guard (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+            return try? JSONDecoder().decode(AuthUser.self, from: data)
+        } catch {
+            return nil
+        }
     }
 }

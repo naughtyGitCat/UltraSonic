@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Capture, Tag, FilterOptions } from '../types';
 import { toOpts, MediaThumbnail } from '../utils';
 import { Button, Select, Checkbox } from '../ui';
+import { withAuthToken } from '../auth';
 import DetailModal from './DetailModal';
 
 export default function GalleryTab() {
@@ -134,7 +135,7 @@ export default function GalleryTab() {
             const isLast = index === captures.length - 1;
             const absolutePath = pic.fileFullPath || `${pic.filePath}\\${pic.fileName}`;
             const displayDate = pic.captureTime ? new Date(pic.captureTime).toLocaleString() : '';
-            const imgSrc = `/api/image?path=${encodeURIComponent(absolutePath)}&agentId=${pic.agentId || 'local'}`;
+            const imgSrc = withAuthToken(`/api/image?path=${encodeURIComponent(absolutePath)}&agentId=${pic.agentId || 'local'}`);
             return (
               <div ref={isLast ? lastElementRef : null} key={pic.id || `${pic.fileName}_${index}`}
                 className="thumb" onClick={() => { setSelectedCapture(pic); setSelectedIndex(index); }}>

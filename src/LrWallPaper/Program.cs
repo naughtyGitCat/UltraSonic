@@ -86,6 +86,20 @@ class Program
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.FromMinutes(2)
                 };
+                // Browser <img> tags and iOS AsyncImage can't send an Authorization
+                // header, so also accept the JWT via ?access_token= on media routes.
+                o.Events = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents
+                {
+                    OnMessageReceived = ctx =>
+                    {
+                        if (string.IsNullOrEmpty(ctx.Token))
+                        {
+                            var qs = ctx.Request.Query["access_token"];
+                            if (!string.IsNullOrEmpty(qs)) ctx.Token = qs;
+                        }
+                        return Task.CompletedTask;
+                    }
+                };
             });
         builder.Services.AddAuthorization(o =>
         {
@@ -127,11 +141,32 @@ class Program
         app.UseStaticFiles();
 
         app.UseAuthentication();
+        // Service-to-service: an Agent call carrying the shared X-Service-Key becomes a
+        // trusted "service" principal so it satisfies the authenticated-user fallback
+        // policy without a per-user JWT. No-op when auth or the key is unconfigured.
+        if (authService.Enabled && !string.IsNullOrEmpty(authService.ServiceApiKey))
+        {
+            app.Use(async (ctx, next) =>
+            {
+                if (ctx.User?.Identity?.IsAuthenticated != true)
+                {
+                    var key = ctx.Request.Headers["X-Service-Key"].ToString();
+                    if (!string.IsNullOrEmpty(key) && key == authService.ServiceApiKey)
+                    {
+                        var id = new System.Security.Claims.ClaimsIdentity("service");
+                        id.AddClaim(new System.Security.Claims.Claim(
+                            System.Security.Claims.ClaimTypes.Role, "service"));
+                        ctx.User = new System.Security.Claims.ClaimsPrincipal(id);
+                    }
+                }
+                await next();
+            });
+        }
         app.UseAuthorization();
 
         app.MapControllers();
 
-        app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.Now })).AllowAnonymous();
+        app.MapGet("/api/health", (AuthService auth) => Results.Ok(new { status = "healthy", timestamp = DateTime.Now, authEnabled = auth.Enabled })).AllowAnonymous();
 
         var configuredCacheDir = app.Configuration["UltraSonic:CacheDirectory"] ?? "";
         var cacheDir = string.IsNullOrEmpty(configuredCacheDir)

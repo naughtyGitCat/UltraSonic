@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { Capture, Tag, FaceInfo, Person } from '../types';
 import { VIDEO_EXTS, getExt, formatFileSize } from '../utils';
 import { Button, Card } from '../ui';
+import { withAuthToken } from '../auth';
 
 interface Props {
   capture: Capture;
@@ -19,7 +20,7 @@ export default function DetailModal({ capture, captures, index, onClose, onNavig
   const isVideo = VIDEO_EXTS.includes(ext);
   const isPhoto = !isVideo;
   const absolutePath = capture.fileFullPath || `${capture.filePath}\\${capture.fileName}`;
-  const imgSrc = `/api/image?path=${encodeURIComponent(absolutePath)}&agentId=${capture.agentId || 'local'}`;
+  const imgSrc = withAuthToken(`/api/image?path=${encodeURIComponent(absolutePath)}&agentId=${capture.agentId || 'local'}`);
 
   const [fileTags, setFileTags] = useState<Tag[]>([]);
   const [newTagName, setNewTagName] = useState('');
@@ -76,7 +77,7 @@ export default function DetailModal({ capture, captures, index, onClose, onNavig
                 ? <video src={imgSrc} controls style={{ maxWidth: '100%', maxHeight: '100%' }} />
                 : showLivePhoto && livePhotoMov
                   ? <video
-                      src={`/api/image?path=${encodeURIComponent(livePhotoMov.fileFullPath || `${livePhotoMov.filePath}\\${livePhotoMov.fileName}`)}&agentId=${livePhotoMov.agentId || 'local'}`}
+                      src={withAuthToken(`/api/image?path=${encodeURIComponent(livePhotoMov.fileFullPath || `${livePhotoMov.filePath}\\${livePhotoMov.fileName}`)}&agentId=${livePhotoMov.agentId || 'local'}`)}
                       autoPlay loop muted style={{ maxWidth: '100%', maxHeight: '100%' }} />
                   : <img src={imgSrc} alt={capture.fileName} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />}
               {showFaces && faces.map(f => (
