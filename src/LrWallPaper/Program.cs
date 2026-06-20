@@ -240,9 +240,23 @@ class Program
         // SPA fallback: any unmatched route returns index.html
         app.MapFallbackToFile("index.html").AllowAnonymous();   // SPA shell must load to show the login page
 
-        app.MapGet("/api/image", async (string path, string? agentId, bool? convert, AgentManager agentManager, FileMD5Manager md5Manager) =>
+        app.MapGet("/api/image", async (string path, string? agentId, bool? convert, HttpContext http, AgentManager agentManager, FileMD5Manager md5Manager) =>
         {
             if (string.IsNullOrEmpty(path)) return Results.NotFound();
+
+            // Multi-tenancy guard: a regular authenticated user may only fetch their own
+            // media. Admins and anonymous (auth off) callers are unrestricted.
+            var user = http.User;
+            if (user?.Identity?.IsAuthenticated == true && !user.IsInRole("admin"))
+            {
+                var uidStr = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                             ?? user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+                if (long.TryParse(uidStr, out var uid))
+                {
+                    var owned = await md5Manager.FindByFullPathAsync(path);
+                    if (owned == null || owned.OwnerUserId != uid) return Results.NotFound();
+                }
+            }
 
             // convert defaults to true (web UI). Clients that decode HEIC/RAW natively
             // (e.g. the iOS app) pass convert=false to get original bytes — no Magick.

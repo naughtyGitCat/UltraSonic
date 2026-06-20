@@ -101,6 +101,10 @@ public class MobileIngestController : ControllerBase
         if (request.Latitude is { } lat) Field("latitude", lat.ToString(CultureInfo.InvariantCulture));
         if (request.Longitude is { } lon) Field("longitude", lon.ToString(CultureInfo.InvariantCulture));
         Field("sourceType", request.SourceType ?? "userLibrary");
+        // Multi-tenancy: tag the file with the authenticated uploader (when Auth:Enabled).
+        // Unauthenticated (LAN/homelab) → no owner, stored as shared/legacy.
+        var ownerId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (!string.IsNullOrEmpty(ownerId)) Field("ownerUserId", ownerId);
 
         using var client = new HttpClient(new HttpClientHandler { UseProxy = false })
         {

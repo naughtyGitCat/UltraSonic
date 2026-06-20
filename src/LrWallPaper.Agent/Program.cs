@@ -408,6 +408,8 @@ app.MapPost("/api/agent/ingest", async (HttpContext ctx, AgentState agentState, 
         double? lon = double.TryParse(form["longitude"], out var lo) ? lo : null;
         var cameraModel = form["cameraModel"].ToString();
         var sourceType = string.IsNullOrWhiteSpace(form["sourceType"]) ? "userLibrary" : form["sourceType"].ToString();
+        // Multi-tenancy: ownerUserId is forwarded by the Master proxy when Auth:Enabled; null otherwise.
+        long? ownerUserId = long.TryParse(form["ownerUserId"], out var ow) ? ow : null;
 
         using var client = new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromMinutes(2) };
         var record = new
@@ -421,6 +423,7 @@ app.MapPost("/api/agent/ingest", async (HttpContext ctx, AgentState agentState, 
             AgentId = agentId,
             Latitude = lat,
             Longitude = lon,
+            OwnerUserId = ownerUserId,
             FileSize = size,
             FileMD5 = md5,
             CaptureTime = captureTime
