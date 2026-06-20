@@ -68,6 +68,32 @@ class Program
         builder.Services.AddSingleton<MasterTrayIconManager>();
 #endif
 
+        // --- Auth (Phase 2): config-gated. Auth:Enabled=false (default) keeps every
+        // endpoint open for LAN/homelab use; =true requires a JWT on everything except
+        // [AllowAnonymous] (login/register, health, version, the SPA shell). ---
+        var authService = new AuthService(builder.Configuration);
+        builder.Services.AddSingleton(authService);
+        builder.Services.AddSingleton<UserManager>();
+        builder.Services.AddAuthentication(Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer(o =>
+            {
+                o.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+                {
+                    ValidateIssuer = false,
+                    ValidateAudience = false,
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = authService.SigningKey,
+                    ValidateLifetime = true,
+                    ClockSkew = TimeSpan.FromMinutes(2)
+                };
+            });
+        builder.Services.AddAuthorization(o =>
+        {
+            if (authService.Enabled)
+                o.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+                    .RequireAuthenticatedUser().Build();
+        });
+
         builder.Services.AddControllers();
         // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
         builder.Services.AddEndpointsApiExplorer();
@@ -100,11 +126,12 @@ class Program
         app.UseDefaultFiles();
         app.UseStaticFiles();
 
+        app.UseAuthentication();
         app.UseAuthorization();
 
         app.MapControllers();
 
-        app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.Now }));
+        app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.Now })).AllowAnonymous();
 
         var configuredCacheDir = app.Configuration["UltraSonic:CacheDirectory"] ?? "";
         var cacheDir = string.IsNullOrEmpty(configuredCacheDir)
@@ -146,7 +173,7 @@ class Program
             var infoVer = asm.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
                 .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion ?? "unknown";
             return Results.Ok(new { version = infoVer });
-        });
+        }).AllowAnonymous();
 
         // Log viewing API
         app.MapGet("/api/logs", (string? type, int? lines, string? agentId, AgentManager agentManager) =>
@@ -211,7 +238,7 @@ class Program
         });
 
         // SPA fallback: any unmatched route returns index.html
-        app.MapFallbackToFile("index.html");
+        app.MapFallbackToFile("index.html").AllowAnonymous();   // SPA shell must load to show the login page
 
         app.MapGet("/api/image", async (string path, string? agentId, bool? convert, AgentManager agentManager, FileMD5Manager md5Manager) =>
         {
