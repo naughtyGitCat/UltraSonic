@@ -1,8 +1,18 @@
+<div align="center">
+
+<img src="docs/brand/ultrasonic-logo.png" alt="UltraSonic" width="420">
+
 # UltraSonic
 
-分布式本地照片 / RAW 管理平台。通过 **Master-Agent** 架构，在多台 Windows 机器上建立统一的元数据索引，支持 iOS 设备与可移动存储自动导入、GPS 提取、MD5 去重、服务端 RAW/HEIC 转换，以及 React95 风格 Web UI（Gallery 画廊过滤、Folders 文件夹浏览、Node Config 节点配置管理）。
+**自托管照片 / RAW 备份，采用 Master–Agent 架构。**
 
-> English: [README.md](README.md)
+[在线 Demo](https://demo.ngcat.uk:8443) · [English](README.md)
+
+</div>
+
+---
+
+分布式照片 / RAW 管理平台。通过 **Master-Agent** 架构，在多台机器（Windows、Linux）上建立统一的元数据索引，支持 iOS 设备与可移动存储自动导入、GPS 提取、MD5 去重、服务端 RAW/HEIC 转换、可选多用户认证，以及 React Web UI（Gallery 画廊过滤、Folders 文件夹浏览、Node Config 节点配置管理）。
 
 ---
 
