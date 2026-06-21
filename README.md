@@ -1,8 +1,18 @@
+<div align="center">
+
+<img src="docs/brand/ultrasonic-logo.png" alt="UltraSonic" width="420">
+
 # UltraSonic
 
-A distributed local photo / RAW management platform. The **Master-Agent** architecture builds a unified metadata index across multiple Windows machines, with automatic import from iOS devices and removable storage, GPS extraction, MD5 de-duplication, server-side RAW/HEIC conversion, and a React95-style web UI with gallery filters, folder browser, and configuration management.
+**Self-hosted photo &amp; RAW backup with a Master–Agent architecture.**
 
-> Chinese: [README.zh.md](README.zh.md)
+[Live demo](https://demo.ngcat.uk:8443) · [中文](README.zh.md)
+
+</div>
+
+---
+
+A distributed photo / RAW management platform. The **Master-Agent** architecture builds a unified metadata index across multiple machines (Windows, Linux), with automatic import from iOS devices and removable storage, GPS extraction, MD5 de-duplication, server-side RAW/HEIC conversion, optional multi-user authentication, and a React web UI with gallery filters, folder browser, and configuration management.
 
 ---
 
