@@ -69,11 +69,24 @@ public class ScanAndPushJob : BackgroundService
                 PersistAgentId(agentId);
             }
 
-            // Auto-register with Master — resolve actual IP instead of bind address
-            var bindUrl = _configuration["Urls"] ?? "http://localhost:5282";
-            var uri = new Uri(bindUrl);
-            var actualIp = GetLocalIpAddress();
-            var agentUrl = $"{uri.Scheme}://{actualIp}:{uri.Port}";
+            // Auto-register with Master. Prefer an explicit advertised endpoint
+            // (Agent:AdvertiseEndpoint) — needed when the Master reaches the Agent over
+            // loopback (same-host / reverse-proxy deploys, e.g. http://127.0.0.1:5282),
+            // since the auto-detected LAN/public IP would be unreachable or force a
+            // wider bind. Falls back to scheme://<detected-ip>:<bind-port>.
+            string agentUrl;
+            var advertise = _configuration["Agent:AdvertiseEndpoint"];
+            if (!string.IsNullOrWhiteSpace(advertise))
+            {
+                agentUrl = advertise.TrimEnd('/');
+            }
+            else
+            {
+                var bindUrl = _configuration["Urls"] ?? "http://localhost:5282";
+                var uri = new Uri(bindUrl);
+                var actualIp = GetLocalIpAddress();
+                agentUrl = $"{uri.Scheme}://{actualIp}:{uri.Port}";
+            }
             await RegisterWithMaster(masterEndpoint, agentId, agentUrl, stoppingToken);
 
             _logger.LogInformation("Agent {Id} starting scan. Master={Master}, Paths={Paths}, Interval={Min}m",
